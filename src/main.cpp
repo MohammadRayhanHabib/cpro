@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -60,6 +61,78 @@ int toInt(const string& text) {
     char extra;
     if ((input >> value) && !(input >> extra)) return value;
     return -1;
+}
+
+// -------------------- Monochrome terminal UI --------------------
+
+const int UI_WIDTH = 72;
+
+string numberText(int value) {
+    stringstream output;
+    output << value;
+    return output.str();
+}
+
+void border(char fill = '-') {
+    cout << '+' << string(UI_WIDTH - 2, fill) << "+\n";
+}
+
+void boxText(string text) {
+    const int space = UI_WIDTH - 4;
+    if (text.empty()) text = " ";
+
+    while (!text.empty()) {
+        int cut = static_cast<int>(text.size());
+        if (cut > space) {
+            cut = space;
+            size_t lastSpace = text.rfind(' ', space);
+            if (lastSpace != string::npos && lastSpace > 0)
+                cut = static_cast<int>(lastSpace);
+        }
+
+        string part = text.substr(0, cut);
+        cout << "| " << part << string(space - part.size(), ' ') << " |\n";
+        text.erase(0, cut);
+        while (!text.empty() && text[0] == ' ') text.erase(0, 1);
+    }
+}
+
+void field(const string& name, const string& value) {
+    boxText(name + value);
+}
+
+void clearScreen() {
+    if (getenv("SHOHAY_TEST") == NULL) system("cls");
+}
+
+void pageHeader(const string& pageName) {
+    clearScreen();
+    border('=');
+    boxText("SHOHAY");
+    boxText("Community Help Request Management System");
+    border('=');
+    boxText(pageName);
+    border('-');
+}
+
+void section(const string& title) {
+    border('-');
+    boxText(title);
+    border('-');
+}
+
+void notice(const string& title, const string& message) {
+    border('-');
+    boxText(title);
+    boxText(message);
+    border('-');
+}
+
+void pauseScreen() {
+    if (getenv("SHOHAY_TEST") != NULL) return;
+    cout << "\nPress Enter to return to the dashboard...";
+    string line;
+    getline(cin, line);
 }
 
 // -------------------- Status and urgency --------------------
@@ -220,27 +293,30 @@ public:
     }
 
     void show(bool revealPrivate = false) const {
-        cout << "\n----------------------------------------\n";
-        cout << "Case ID     : SH-" << id << "\n";
-        cout << "Type        : " << type() << "\n";
-        cout << "Area        : " << area << "\n";
-        cout << "Urgency     : " << urgencyName(urgency) << "\n";
-        cout << "People      : " << people << "\n";
-        cout << "Priority    : " << priorityName() << "\n";
-        cout << "Status      : " << statusName(status) << "\n";
-        cout << "Description : " << description << "\n";
-        cout << "Central     : " << (centralReview ? "Yes" : "No") << "\n";
-        if (!claimedBy.empty()) cout << "Claimed by  : " << claimedBy << "\n";
+        border('=');
+        boxText("CASE SH-" + numberText(id) + "  |  " + type() + " REQUEST");
+        border('-');
+        field("Status         : ", statusName(status));
+        field("Priority       : ", priorityName());
+        field("Urgency        : ", urgencyName(urgency));
+        field("Area           : ", area);
+        field("Affected people: ", numberText(people));
+        field("Description    : ", description);
+        field("Central review : ", centralReview ? "Required" : "Not required");
+        if (!claimedBy.empty()) field("Claimed by     : ", claimedBy);
+        border('-');
+        boxText("BENEFICIARY INFORMATION");
 
         if (revealPrivate) {
-            cout << "Beneficiary : " << beneficiary << "\n";
-            cout << "Phone       : " << phone << "\n";
-            cout << "Address     : " << address << "\n";
+            field("Name           : ", beneficiary);
+            field("Phone          : ", phone);
+            field("Exact address  : ", address);
         } else {
-            cout << "Beneficiary : [PROTECTED]\n";
-            cout << "Phone       : [PROTECTED]\n";
-            cout << "Address     : [PROTECTED]\n";
+            field("Name           : ", "[PROTECTED]");
+            field("Phone          : ", "[PROTECTED]");
+            field("Exact address  : ", "[PROTECTED]");
         }
+        border('=');
     }
 
     void showForOrganization() const { show(privateAccess); }
@@ -361,10 +437,16 @@ private:
         return NULL;
     }
 
+    int countStatus(Status status) const {
+        int count = 0;
+        for (size_t i = 0; i < requests.size(); i++)
+            if (requests[i]->getStatus() == status) count++;
+        return count;
+    }
+
 public:
     RequestManager(const string& file) : nextId(1001), fileName(file) {
         nextId = FileManager::load(requests, fileName) + 1;
-        cout << requests.size() << " saved request(s) loaded.\n";
     }
 
     ~RequestManager() {
@@ -372,6 +454,23 @@ public:
     }
 
     bool save() const { return FileManager::save(requests, fileName); }
+
+    void showDashboard() const {
+        int central = 0;
+        for (size_t i = 0; i < requests.size(); i++)
+            if (requests[i]->needsCentralReview()) central++;
+
+        boxText("REQUEST OVERVIEW");
+        border('-');
+        boxText("Total: " + numberText(static_cast<int>(requests.size())) +
+                "   Pending: " + numberText(countStatus(PENDING)) +
+                "   Approved: " + numberText(countStatus(APPROVED)));
+        boxText("Claimed: " + numberText(countStatus(CLAIMED)) +
+                "   Completed: " + numberText(countStatus(COMPLETED)) +
+                "   Rejected: " + numberText(countStatus(REJECTED)));
+        boxText("Central review required: " + numberText(central));
+        border('=');
+    }
 
     int submit(const string& type, RequestData data) {
         data.id = nextId++;
@@ -388,22 +487,22 @@ public:
                 found = true;
             }
         }
-        if (!found) cout << "No pending requests.\n";
+        if (!found) notice("EMPTY STATE", "No pending requests are waiting for review.");
     }
 
     void review(int id, bool approved, const Moderator& moderator) {
         HelpRequest* r = find(id);
         if (r == NULL) {
-            cout << "Case not found.\n";
+            notice("NOT FOUND", "The requested case does not exist.");
             return;
         }
         bool changed = approved ? r->approve() : r->reject();
         if (!changed) {
-            cout << "Only Pending requests can be reviewed.\n";
+            notice("ACTION BLOCKED", "Only Pending requests can be reviewed.");
             return;
         }
-        cout << moderator.getName() << " changed SH-" << id << " to "
-             << statusName(r->getStatus()) << ".\n";
+        notice("REQUEST UPDATED", moderator.getName() + " changed SH-" +
+               numberText(id) + " to " + statusName(r->getStatus()) + ".");
         save();
     }
 
@@ -415,16 +514,17 @@ public:
                 found = true;
             }
         }
-        if (!found) cout << "No approved requests.\n";
+        if (!found) notice("EMPTY STATE", "No approved requests are available.");
     }
 
     void claim(int id, const Organization& organization) {
         HelpRequest* r = find(id);
         if (r == NULL || !r->claim(organization)) {
-            cout << "Only an Approved request can be claimed.\n";
+            notice("ACTION BLOCKED", "Only an Approved request can be claimed.");
             return;
         }
-        cout << organization.getName() << " claimed SH-" << id << ".\n";
+        notice("REQUEST CLAIMED", organization.getName() + " claimed SH-" +
+               numberText(id) + ".");
         save();
     }
 
@@ -436,33 +536,34 @@ public:
                 found = true;
             }
         }
-        if (!found) cout << "This organization has no claimed requests.\n";
+        if (!found) notice("EMPTY STATE", "This organization has no claimed requests.");
     }
 
     void complete(int id, const Organization& organization) {
         HelpRequest* r = find(id);
         if (r == NULL || !r->complete(organization)) {
-            cout << "Only the claiming organization can complete this case.\n";
+            notice("ACTION BLOCKED", "Only the claiming organization can complete this case.");
             return;
         }
-        cout << "SH-" << id << " is now Completed.\n";
+        notice("ASSISTANCE COMPLETED", "SH-" + numberText(id) + " is now Completed.");
         save();
     }
 
     void authorize(int id, const Admin& admin) {
         HelpRequest* r = find(id);
         if (r == NULL || !r->authorizePrivateData()) {
-            cout << "The case must be Claimed before authorization.\n";
+            notice("ACTION BLOCKED", "The case must be Claimed before authorization.");
             return;
         }
-        cout << admin.getName() << " authorized private data for SH-" << id << ".\n";
+        notice("ACCESS AUTHORIZED", admin.getName() + " authorized private data for SH-" +
+               numberText(id) + ".");
         save();
     }
 
     void searchById(int id) {
         HelpRequest* r = find(id);
         if (r == NULL || !r->isPublic()) {
-            cout << "No verified public request found.\n";
+            notice("NOT FOUND", "No verified public request matched that case ID.");
             return;
         }
         r->show();
@@ -477,12 +578,12 @@ public:
                 found = true;
             }
         }
-        if (!found) cout << "No verified request found in that area.\n";
+        if (!found) notice("NOT FOUND", "No verified request matched that area.");
     }
 
     void showAll() const {
         if (requests.empty()) {
-            cout << "No requests.\n";
+            notice("EMPTY STATE", "No requests are stored in the system.");
             return;
         }
         for (size_t i = 0; i < requests.size(); i++) requests[i]->show(true);
@@ -491,20 +592,31 @@ public:
 
 // -------------------- Main program --------------------
 
-void menu() {
-    cout << "\n=== SHOHAY ===\n"
-         << "1. Submit request\n"
-         << "2. View pending\n"
-         << "3. Approve / reject\n"
-         << "4. View verified requests\n"
-         << "5. Claim request\n"
-         << "6. View organization cases\n"
-         << "7. Complete request\n"
-         << "8. Search by ID / area\n"
-         << "9. Authorize private data\n"
-         << "10. Admin view all\n"
-         << "11. Show user roles\n"
-         << "0. Save and exit\n";
+void menu(const RequestManager& manager) {
+    pageHeader("MAIN DASHBOARD");
+    manager.showDashboard();
+
+    section("VOLUNTEER");
+    boxText("[1] Submit a new help request");
+
+    section("MODERATOR");
+    boxText("[2] View pending requests");
+    boxText("[3] Approve or reject a request");
+
+    section("ORGANIZATION");
+    boxText("[4] View verified requests");
+    boxText("[5] Claim an approved request");
+    boxText("[6] View organization cases");
+    boxText("[7] Mark assistance as completed");
+
+    section("PUBLIC AND ADMIN");
+    boxText("[8] Search by case ID or area");
+    boxText("[9] Authorize private information");
+    boxText("[10] View all internal records");
+    boxText("[11] Show system user roles");
+    border('=');
+    boxText("[0] Save and exit");
+    border('=');
 }
 
 int main() {
@@ -523,14 +635,19 @@ int main() {
     int choice;
 
     do {
-        menu();
+        menu(manager);
         choice = askInt("Choose: ", 0, 11);
 
         if (choice == 1) {
-            cout << "1. Food  2. Medical  3. Disaster\n";
+            pageHeader("VOLUNTEER / NEW HELP REQUEST");
+            section("SELECT REQUEST TYPE");
+            boxText("[1] Food support");
+            boxText("[2] Medical support");
+            boxText("[3] Disaster relief");
             int typeNumber = askInt("Type: ", 1, 3);
             string types[] = {"", "Food", "Medical", "Disaster"};
 
+            section("REQUEST DETAILS");
             RequestData data;
             data.area = ask("Approximate area: ");
             data.urgency = askInt("Urgency (1=Low, 2=Medium, 3=High): ", 1, 3);
@@ -542,41 +659,68 @@ int main() {
             data.centralReview = askInt("Local volunteer available? (1=Yes, 2=No): ", 1, 2) == 2;
 
             int id = manager.submit(types[typeNumber], data);
-            cout << volunteer.getName() << " submitted SH-" << id << " with Pending status.\n";
-            if (data.centralReview) cout << "Forwarded to the central moderator.\n";
+            string message = volunteer.getName() + " submitted SH-" + numberText(id) +
+                             " with Pending status.";
+            if (data.centralReview) message += " Forwarded to the central moderator.";
+            notice("REQUEST CREATED", message);
         } else if (choice == 2) {
+            pageHeader("MODERATOR / PENDING REQUESTS");
             manager.showPending();
         } else if (choice == 3) {
+            pageHeader("MODERATOR / REVIEW REQUEST");
             manager.showPending();
+            section("MODERATOR DECISION");
             int id = askInt("Case ID without SH-: ", 1, 999999999);
             bool approve = askInt("1=Approve, 2=Reject: ", 1, 2) == 1;
             manager.review(id, approve, moderator);
         } else if (choice == 4) {
+            pageHeader("VERIFIED HELP REQUESTS");
             manager.showVerified();
         } else if (choice == 5) {
+            pageHeader("ORGANIZATION / CLAIM REQUEST");
             manager.showVerified();
+            section("CLAIM ACTION");
             manager.claim(askInt("Case ID to claim: ", 1, 999999999), organization);
         } else if (choice == 6) {
+            pageHeader("ORGANIZATION / MY CASES");
             manager.showOrganizationCases(organization);
         } else if (choice == 7) {
+            pageHeader("ORGANIZATION / COMPLETE ASSISTANCE");
             manager.showOrganizationCases(organization);
+            section("COMPLETION ACTION");
             manager.complete(askInt("Case ID to complete: ", 1, 999999999), organization);
         } else if (choice == 8) {
+            pageHeader("PUBLIC REQUEST SEARCH");
+            section("SEARCH OPTIONS");
+            boxText("[1] Search using case ID");
+            boxText("[2] Search using approximate area");
             int searchType = askInt("1=Search ID, 2=Search area: ", 1, 2);
             if (searchType == 1) manager.searchById(askInt("Case ID: ", 1, 999999999));
             else manager.searchByArea(ask("Area: "));
         } else if (choice == 9) {
+            pageHeader("ADMIN / PRIVACY AUTHORIZATION");
+            boxText("Private information can be shared only after an organization claims the case.");
+            border('-');
             manager.authorize(askInt("Claimed case ID: ", 1, 999999999), admin);
         } else if (choice == 10) {
+            pageHeader("ADMIN / ALL INTERNAL RECORDS");
             manager.showAll();
         } else if (choice == 11) {
+            pageHeader("SYSTEM USER ROLES");
             // Polymorphism: correct child role() runs through a User pointer.
-            for (size_t i = 0; i < users.size(); i++)
-                cout << users[i]->role() << ": " << users[i]->getName() << "\n";
+            for (size_t i = 0; i < users.size(); i++) {
+                border('-');
+                field("Role : ", users[i]->role());
+                field("User : ", users[i]->getName());
+                border('-');
+            }
         }
+
+        if (choice != 0) pauseScreen();
     } while (choice != 0);
 
-    if (manager.save()) cout << "Saved. Goodbye.\n";
-    else cout << "Save failed.\n";
+    pageHeader("SESSION CLOSED");
+    if (manager.save()) notice("SAVED", "All records were saved. Goodbye.");
+    else notice("SAVE FAILED", "The latest records could not be saved.");
     return 0;
 }
