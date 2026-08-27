@@ -26,29 +26,6 @@ Assistance is delivered
 
 Only valid state changes are allowed. For example, an organization cannot claim a Pending request.
 
-## Monochrome terminal dashboard
-
-The interface uses plain ASCII borders, cards and sections, so it works without terminal colors.
-
-```text
-+======================================================================+
-| SHOHAY                                                               |
-| Community Help Request Management System                             |
-+======================================================================+
-| MAIN DASHBOARD                                                       |
-+----------------------------------------------------------------------+
-| Total: 3   Pending: 1   Approved: 1                                  |
-| Claimed: 0   Completed: 1   Rejected: 0                              |
-+======================================================================+
-| [1] Submit a new help request                                        |
-| [2] View pending requests                                            |
-| [3] Approve or reject a request                                      |
-| [0] Save and exit                                                    |
-+======================================================================+
-```
-
-Each request is shown as a bordered card. After completing an action, press Enter to return to the main dashboard.
-
 ## Build and run
 
 Open PowerShell in the `Shohay` folder, then run:
