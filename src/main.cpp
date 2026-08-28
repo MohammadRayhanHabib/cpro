@@ -6,66 +6,68 @@
 #include <vector>
 using namespace std;
 
-string ask(string text) {
+string input(string message) {
     string value;
-    cout << text;
+    cout << message;
     getline(cin, value);
     return value;
 }
 
-string askRequired(string text) {
+string requiredInput(string message) {
     while (true) {
-        string value = ask(text);
+        string value = input(message);
         if (!value.empty()) return value;
-        cout << "This field cannot be empty.\n";
+        cout << "Value cannot be empty.\n";
     }
 }
 
-int askNumber(string text, int low, int high) {
+int numberInput(string message, int minimum, int maximum) {
     while (true) {
-        stringstream input(ask(text));
+        stringstream stream(input(message));
         int value;
         char extra;
-        if (input >> value && !(input >> extra) && value >= low && value <= high)
+        if (stream >> value && !(stream >> extra) &&
+            value >= minimum && value <= maximum)
             return value;
-        cout << "Enter a number from " << low << " to " << high << ".\n";
+        cout << "Enter " << minimum << " to " << maximum << ".\n";
     }
 }
 
-string safe(string text) {
-    for (int i = 0; i < (int)text.size(); i++)
-        if (text[i] == '|') text[i] = '/';
-    return text;
+string clean(string value) {
+    for (int i = 0; i < (int)value.size(); i++)
+        if (value[i] == '|') value[i] = '/';
+    return value;
 }
 
 vector<string> split(string line, char separator = '|') {
     vector<string> parts;
     string part;
-    stringstream input(line);
-    while (getline(input, part, separator)) parts.push_back(part);
+    stringstream stream(line);
+    while (getline(stream, part, separator)) parts.push_back(part);
     return parts;
 }
 
-string lowerText(string text) {
-    transform(text.begin(), text.end(), text.begin(), ::tolower);
-    return text;
+string lowerCase(string value) {
+    for (int i = 0; i < (int)value.size(); i++)
+        value[i] = (char)tolower((unsigned char)value[i]);
+    return value;
 }
 
 enum Status { SUBMITTED, UNDER_REVIEW, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED };
 enum Priority { LOW, MEDIUM, HIGH, CRITICAL };
 
-string statusName(Status value) {
+string statusText(Status status) {
     string names[] = {"Submitted", "Under Review", "Assigned",
                       "In Progress", "Resolved", "Closed"};
-    return names[value];
+    return names[status];
 }
 
-string priorityName(Priority value) {
+string priorityText(Priority priority) {
     string names[] = {"Low", "Medium", "High", "Critical"};
-    return names[value];
+    return names[priority];
 }
 
-// Abstraction: every user type must provide its role.
+// Abstraction and inheritance
 class User {
 private:
     int id;
@@ -76,71 +78,69 @@ public:
     virtual ~User() {}
     int getId() const { return id; }
     string getName() const { return name; }
-    virtual string role() const = 0;
+    virtual string getRole() const = 0;
 };
 
 class Citizen : public User {
 public:
     Citizen(int id, string name) : User(id, name) {}
-    string role() const { return "Citizen"; }
+    string getRole() const { return "Citizen"; }
 };
 
 class Authority : public User {
 public:
     Authority(int id, string name) : User(id, name) {}
-    string role() const { return "Authority"; }
+    string getRole() const { return "Authority"; }
 };
 
 class Admin : public Authority {
 public:
     Admin(int id, string name) : Authority(id, name) {}
-    string role() const { return "Admin"; }
+    string getRole() const { return "Admin"; }
 };
 
 class Officer : public Authority {
 public:
     Officer(int id, string name) : Authority(id, name) {}
-    string role() const { return "Officer"; }
+    string getRole() const { return "Officer"; }
 };
 
 class Notification {
-private:
+public:
     int userId;
-    bool read;
+    bool isRead;
     string message;
 
-public:
-    Notification(int id, string text, bool seen = false)
-        : userId(id), read(seen), message(text) {}
-    int getUserId() const { return userId; }
-    bool isRead() const { return read; }
-    string getMessage() const { return message; }
-    void markRead() { read = true; }
-    string saveLine() const {
-        return to_string(userId) + "|" + to_string(read) + "|" + safe(message);
+    Notification(int id, string text, bool read = false)
+        : userId(id), isRead(read), message(text) {}
+
+    string saveData() const {
+        return to_string(userId) + "|" + to_string(isRead) + "|" + clean(message);
     }
 };
 
-// Encapsulation: complaint data can only change through validated methods.
+// Encapsulation and runtime polymorphism
 class Complaint {
 private:
     int id, citizenId, rating;
     string title, description, location, department, officer;
-    string resolution, feedbackComment;
+    string resolution, comment;
     vector<int> supporters;
     Status status;
     Priority priority;
 
 public:
-    Complaint(int number, int owner, string heading, string details, string place)
-        : id(number), citizenId(owner), rating(0), title(heading),
-          description(details), location(place), department("Not assigned"),
-          officer("Not assigned"), resolution("None"), feedbackComment("None"),
+    Complaint(int complaintId, int ownerId, string complaintTitle,
+              string details, string place)
+        : id(complaintId), citizenId(ownerId), rating(0),
+          title(complaintTitle), description(details), location(place),
+          department("Not assigned"), officer("Not assigned"),
+          resolution("None"), comment("None"),
           status(SUBMITTED), priority(LOW) {}
 
     virtual ~Complaint() {}
-    virtual string category() const = 0;
-    virtual int riskScore() const = 0; // Runtime polymorphism
+    virtual string getCategory() const = 0;
+    virtual int getRisk() const = 0;
 
     int getId() const { return id; }
     int getCitizenId() const { return citizenId; }
@@ -148,32 +148,37 @@ public:
     string getOfficer() const { return officer; }
     Status getStatus() const { return status; }
 
-    void setAutomaticPriority() {
-        int score = riskScore();
-        priority = score >= 4 ? CRITICAL : score == 3 ? HIGH : score == 2 ? MEDIUM : LOW;
+    void setAutoPriority() {
+        int risk = getRisk();
+        priority = risk == 1 ? LOW : risk == 2 ? MEDIUM : risk == 3 ? HIGH : CRITICAL;
     }
-    void setPriority(Priority value) { priority = value; }
 
-    bool changeStatus(Status expected, Status next) {
-        if (status != expected) return false;
+    bool setPriority(Priority newPriority) {
+        if (status == CLOSED) return false;
+        priority = newPriority;
+        return true;
+    }
+
+    bool moveStatus(Status current, Status next) {
+        if (status != current) return false;
         status = next;
         return true;
     }
 
-    bool assign(string departmentName, string officerName) {
-        if (!changeStatus(UNDER_REVIEW, ASSIGNED)) return false;
+    bool assignTo(string departmentName, string officerName) {
+        if (!moveStatus(UNDER_REVIEW, ASSIGNED)) return false;
         department = departmentName;
         officer = officerName;
         return true;
     }
 
     bool resolve(string note) {
-        if (!changeStatus(IN_PROGRESS, RESOLVED)) return false;
+        if (!moveStatus(IN_PROGRESS, RESOLVED)) return false;
         resolution = note;
         return true;
     }
 
-    bool addSupport(int userId) {
+    bool support(int userId) {
         if (status == CLOSED) return false;
         for (int i = 0; i < (int)supporters.size(); i++)
             if (supporters[i] == userId) return false;
@@ -181,55 +186,54 @@ public:
         return true;
     }
 
-    bool addFeedback(int stars, string comment) {
+    bool feedback(int stars, string feedbackComment) {
         if (status < RESOLVED || rating != 0) return false;
         rating = stars;
-        feedbackComment = comment;
+        comment = feedbackComment;
         return true;
     }
 
-    void restore(Priority savedPriority, Status savedStatus, vector<int> savedSupporters,
-                 string dept, string assignedOfficer, string note,
-                 int stars, string comment) {
-        priority = savedPriority;
-        status = savedStatus;
-        supporters = savedSupporters;
-        department = dept;
-        officer = assignedOfficer;
-        resolution = note;
-        rating = stars;
-        feedbackComment = comment;
+    void restore(Priority oldPriority, Status oldStatus, vector<int> oldSupporters,
+                 string oldDepartment, string oldOfficer, string oldResolution,
+                 int oldRating, string oldComment) {
+        priority = oldPriority;
+        status = oldStatus;
+        supporters = oldSupporters;
+        department = oldDepartment;
+        officer = oldOfficer;
+        resolution = oldResolution;
+        rating = oldRating;
+        comment = oldComment;
     }
 
-    void display() const {
+    void show() const {
         cout << "\n----------------------------------------"
              << "\nComplaint ID : CC-" << id
-             << "\nCategory     : " << category()
+             << "\nCategory     : " << getCategory()
              << "\nTitle        : " << title
              << "\nDescription  : " << description
              << "\nLocation     : " << location
-             << "\nPriority     : " << priorityName(priority)
-             << "\nStatus       : " << statusName(status)
+             << "\nPriority     : " << priorityText(priority)
+             << "\nStatus       : " << statusText(status)
              << "\nSupports     : " << supporters.size()
              << "\nDepartment   : " << department
              << "\nOfficer      : " << officer
              << "\nResolution   : " << resolution
              << "\nRating       : " << (rating ? to_string(rating) + "/5" : "Not given")
-             << "\nComment      : " << feedbackComment << "\n";
+             << "\nComment      : " << comment << "\n";
     }
 
-    string saveLine() const {
-        string supporterIds;
+    string saveData() const {
+        string supporterData;
         for (int i = 0; i < (int)supporters.size(); i++) {
-            if (i) supporterIds += ',';
-            supporterIds += to_string(supporters[i]);
+            if (i > 0) supporterData += ",";
+            supporterData += to_string(supporters[i]);
         }
-        return to_string(id) + "|" + to_string(citizenId) + "|" + category() +
-               "|" + safe(title) + "|" + safe(description) + "|" + safe(location) +
+        return to_string(id) + "|" + to_string(citizenId) + "|" + getCategory() +
+               "|" + clean(title) + "|" + clean(description) + "|" + clean(location) +
                "|" + to_string(priority) + "|" + to_string(status) + "|" +
-               supporterIds + "|" + safe(department) + "|" + safe(officer) +
-               "|" + safe(resolution) + "|" + to_string(rating) + "|" +
-               safe(feedbackComment);
+               supporterData + "|" + clean(department) + "|" + clean(officer) +
+               "|" + clean(resolution) + "|" + to_string(rating) + "|" + clean(comment);
     }
 };
 
@@ -237,157 +241,164 @@ class RoadComplaint : public Complaint {
 public:
     RoadComplaint(int id, int owner, string title, string details, string location)
         : Complaint(id, owner, title, details, location) {}
-    string category() const { return "Road"; }
-    int riskScore() const { return 2; }
+    string getCategory() const { return "Road"; }
+    int getRisk() const { return 2; }
 };
 
 class WasteComplaint : public Complaint {
 public:
     WasteComplaint(int id, int owner, string title, string details, string location)
         : Complaint(id, owner, title, details, location) {}
-    string category() const { return "Waste"; }
-    int riskScore() const { return 1; }
+    string getCategory() const { return "Waste"; }
+    int getRisk() const { return 1; }
 };
 
 class DrainageComplaint : public Complaint {
 public:
     DrainageComplaint(int id, int owner, string title, string details, string location)
         : Complaint(id, owner, title, details, location) {}
-    string category() const { return "Drainage"; }
-    int riskScore() const { return 3; }
+    string getCategory() const { return "Drainage"; }
+    int getRisk() const { return 3; }
 };
 
-class GeneralComplaint : public Complaint {
+class OtherComplaint : public Complaint {
 private:
-    string type;
+    string category;
     int risk;
 
 public:
-    GeneralComplaint(int id, int owner, string title, string details, string location,
-                     string complaintType, int score)
-        : Complaint(id, owner, title, details, location), type(complaintType), risk(score) {}
-    string category() const { return type; }
-    int riskScore() const { return risk; }
+    OtherComplaint(int id, int owner, string title, string details, string location,
+                   string type, int riskScore)
+        : Complaint(id, owner, title, details, location),
+          category(type), risk(riskScore) {}
+    string getCategory() const { return category; }
+    int getRisk() const { return risk; }
 };
 
-Complaint* makeComplaint(string type, int id, int owner, string title,
-                         string details, string location) {
-    if (type == "Road") return new RoadComplaint(id, owner, title, details, location);
-    if (type == "Waste") return new WasteComplaint(id, owner, title, details, location);
-    if (type == "Drainage") return new DrainageComplaint(id, owner, title, details, location);
-    int risk = (type == "Electricity" || type == "Public Health") ? 3 : 2;
-    return new GeneralComplaint(id, owner, title, details, location, type, risk);
+Complaint* createComplaint(string category, int id, int owner, string title,
+                           string description, string location) {
+    if (category == "Road")
+        return new RoadComplaint(id, owner, title, description, location);
+    if (category == "Waste")
+        return new WasteComplaint(id, owner, title, description, location);
+    if (category == "Drainage")
+        return new DrainageComplaint(id, owner, title, description, location);
+    int risk = (category == "Electricity" || category == "Public Health") ? 3 : 2;
+    return new OtherComplaint(id, owner, title, description, location, category, risk);
 }
 
 class Poll {
 private:
-    vector<string> options;
     vector<int> voters, choices;
 
 public:
-    Poll() {
-        options.push_back("Road");
-        options.push_back("Waste");
-        options.push_back("Drainage");
-    }
-
-    void load(string fileName) {
-        ifstream file(fileName.c_str());
-        int userId, option;
-        while (file >> userId >> option)
-            if (option >= 1 && option <= 3) {
+    void load() {
+        ifstream file("votes.txt");
+        int userId, choice;
+        while (file >> userId >> choice)
+            if (choice >= 1 && choice <= 3) {
                 voters.push_back(userId);
-                choices.push_back(option);
+                choices.push_back(choice);
             }
     }
 
-    void save(string fileName) const {
-        ofstream file(fileName.c_str());
+    void save() const {
+        ofstream file("votes.txt");
         for (int i = 0; i < (int)voters.size(); i++)
             file << voters[i] << " " << choices[i] << "\n";
     }
 
     void show() const {
-        int votes[] = {0, 0, 0};
-        for (int i = 0; i < (int)choices.size(); i++) votes[choices[i] - 1]++;
-        cout << "\nWhich public issue needs attention first?\n";
+        string options[] = {"Road", "Waste", "Drainage"};
+        int count[] = {0, 0, 0};
+        for (int i = 0; i < (int)choices.size(); i++) count[choices[i] - 1]++;
+        cout << "\nWhich issue needs attention first?\n";
         for (int i = 0; i < 3; i++) {
-            int percent = choices.empty() ? 0 : votes[i] * 100 / choices.size();
-            cout << i + 1 << ". " << options[i] << " - " << votes[i]
-                 << " vote(s), " << percent << "%\n";
+            int percent = choices.empty() ? 0 : count[i] * 100 / choices.size();
+            cout << i + 1 << ". " << options[i] << " - "
+                 << count[i] << " vote(s), " << percent << "%\n";
         }
     }
 
-    bool vote(int citizenId, int option) {
+    bool vote(int userId, int choice) {
         for (int i = 0; i < (int)voters.size(); i++)
-            if (voters[i] == citizenId) return false;
-        voters.push_back(citizenId);
-        choices.push_back(option);
+            if (voters[i] == userId) return false;
+        voters.push_back(userId);
+        choices.push_back(choice);
+        save();
         return true;
     }
 };
 
 class FileManager {
 public:
-    static void saveComplaints(const vector<Complaint*>& data, string fileName) {
-        ofstream file(fileName.c_str());
-        for (int i = 0; i < (int)data.size(); i++) file << data[i]->saveLine() << "\n";
+    static void saveComplaints(const vector<Complaint*>& complaints) {
+        ofstream file("complaints.txt");
+        for (int i = 0; i < (int)complaints.size(); i++)
+            file << complaints[i]->saveData() << "\n";
     }
 
-    static int loadComplaints(vector<Complaint*>& data, string fileName) {
-        ifstream file(fileName.c_str());
+    static int loadComplaints(vector<Complaint*>& complaints) {
+        ifstream file("complaints.txt");
         string line;
         int nextId = 1001;
+
         while (getline(file, line)) {
-            vector<string> d = split(line);
+            vector<string> data = split(line);
             try {
-                Complaint* item = NULL;
-                if (d.size() == 12) { // Also supports the old saved format.
-                    item = makeComplaint(d[2], stoi(d[0]), stoi(d[1]), d[3], d[4], d[5]);
-                    vector<int> oldSupports;
-                    for (int i = 0; i < stoi(d[7]); i++) oldSupports.push_back(-i - 1);
-                    item->restore(LOW, (Status)stoi(d[6]), oldSupports,
-                                  d[8], d[9], d[10], stoi(d[11]), "None");
-                } else if (d.size() == 14) {
-                    item = makeComplaint(d[2], stoi(d[0]), stoi(d[1]), d[3], d[4], d[5]);
-                    vector<int> supporters;
-                    vector<string> ids = split(d[8], ',');
+                Complaint* complaint = NULL;
+                vector<int> supporters;
+
+                if (data.size() == 12) { // Old file support
+                    complaint = createComplaint(data[2], stoi(data[0]), stoi(data[1]),
+                                                data[3], data[4], data[5]);
+                    for (int i = 0; i < stoi(data[7]); i++) supporters.push_back(-i - 1);
+                    complaint->restore(LOW, (Status)stoi(data[6]), supporters,
+                                       data[8], data[9], data[10], stoi(data[11]), "None");
+                } else if (data.size() == 14) {
+                    complaint = createComplaint(data[2], stoi(data[0]), stoi(data[1]),
+                                                data[3], data[4], data[5]);
+                    vector<string> ids = split(data[8], ',');
                     for (int i = 0; i < (int)ids.size(); i++)
                         if (!ids[i].empty()) supporters.push_back(stoi(ids[i]));
-                    item->restore((Priority)stoi(d[6]), (Status)stoi(d[7]), supporters,
-                                  d[9], d[10], d[11], stoi(d[12]), d[13]);
+                    complaint->restore((Priority)stoi(data[6]), (Status)stoi(data[7]),
+                                       supporters, data[9], data[10], data[11],
+                                       stoi(data[12]), data[13]);
                 }
-                if (item) {
-                    data.push_back(item);
-                    nextId = max(nextId, item->getId() + 1);
+
+                if (complaint) {
+                    complaints.push_back(complaint);
+                    nextId = max(nextId, complaint->getId() + 1);
                 }
             } catch (...) {
-                cout << "Warning: one damaged complaint record was skipped.\n";
+                cout << "Warning: damaged complaint data skipped.\n";
             }
         }
         return nextId;
     }
 
-    static void saveNotifications(const vector<Notification>& data, string fileName) {
-        ofstream file(fileName.c_str());
-        for (int i = 0; i < (int)data.size(); i++) file << data[i].saveLine() << "\n";
+    static void saveNotifications(const vector<Notification>& notifications) {
+        ofstream file("notifications.txt");
+        for (int i = 0; i < (int)notifications.size(); i++)
+            file << notifications[i].saveData() << "\n";
     }
 
-    static void loadNotifications(vector<Notification>& data, string fileName) {
-        ifstream file(fileName.c_str());
+    static void loadNotifications(vector<Notification>& notifications) {
+        ifstream file("notifications.txt");
         string line;
         while (getline(file, line)) {
-            vector<string> d = split(line);
+            vector<string> data = split(line);
             try {
-                if (d.size() == 3)
-                    data.push_back(Notification(stoi(d[0]), d[2], stoi(d[1])));
+                if (data.size() == 3)
+                    notifications.push_back(
+                        Notification(stoi(data[0]), data[2], stoi(data[1])));
             } catch (...) {}
         }
     }
 
-    static void addHistory(string fileName, string text) {
-        ofstream file(fileName.c_str(), ios::app);
-        file << safe(text) << "\n";
+    static void addHistory(string text) {
+        ofstream file("history.txt", ios::app);
+        file << clean(text) << "\n";
     }
 };
 
@@ -397,7 +408,19 @@ private:
     vector<Notification> notifications;
     Poll poll;
     int nextId;
-    string complaintFile, notificationFile, historyFile, voteFile;
+
+    void save() {
+        FileManager::saveComplaints(complaints);
+        FileManager::saveNotifications(notifications);
+    }
+
+    void addNotification(int userId, string message) {
+        notifications.push_back(Notification(userId, message));
+    }
+
+    void addHistory(int id, string message) {
+        FileManager::addHistory("CC-" + to_string(id) + ": " + message);
+    }
 
     string departmentFor(string category) const {
         if (category == "Road") return "Road & Maintenance";
@@ -410,32 +433,30 @@ private:
         return "General Services";
     }
 
-    void save() {
-        FileManager::saveComplaints(complaints, complaintFile);
-        FileManager::saveNotifications(notifications, notificationFile);
-        poll.save(voteFile);
+    Complaint* selectComplaint() {
+        int id = numberInput("Complaint number (without CC-): ", 1, 999999);
+        Complaint* complaint = findComplaint(id);
+        if (!complaint) cout << "Complaint not found.\n";
+        return complaint;
     }
 
-    void notify(int userId, string text) {
-        notifications.push_back(Notification(userId, text));
-    }
-
-    void history(string text) { FileManager::addHistory(historyFile, text); }
-
-    Complaint* chooseComplaint() {
-        Complaint* item = searchComplaint(
-            askNumber("Complaint number (without CC-): ", 1, 999999));
-        if (!item) cout << "Complaint not found.\n";
-        return item;
+    bool updateStatus(Complaint* complaint, Status from, Status to, string message) {
+        if (!complaint->moveStatus(from, to)) {
+            cout << "Required current status: " << statusText(from) << ".\n";
+            return false;
+        }
+        addNotification(complaint->getCitizenId(), message);
+        addHistory(complaint->getId(), statusText(to));
+        cout << "Status changed to " << statusText(to) << ".\n";
+        save();
+        return true;
     }
 
 public:
-    CivicCareSystem()
-        : complaintFile("complaints.txt"), notificationFile("notifications.txt"),
-          historyFile("history.txt"), voteFile("votes.txt") {
-        nextId = FileManager::loadComplaints(complaints, complaintFile);
-        FileManager::loadNotifications(notifications, notificationFile);
-        poll.load(voteFile);
+    CivicCareSystem() {
+        nextId = FileManager::loadComplaints(complaints);
+        FileManager::loadNotifications(notifications);
+        poll.load();
     }
 
     ~CivicCareSystem() {
@@ -443,20 +464,20 @@ public:
         for (int i = 0; i < (int)complaints.size(); i++) delete complaints[i];
     }
 
-    Complaint* searchComplaint(int id) { // Function overloading 1
+    Complaint* findComplaint(int id) { // Overload 1
         for (int i = 0; i < (int)complaints.size(); i++)
             if (complaints[i]->getId() == id) return complaints[i];
         return NULL;
     }
 
-    void searchComplaint(string category, string location) { // Function overloading 2
+    void findComplaint(string category, string location) { // Overload 2
         bool found = false;
-        category = lowerText(category);
-        location = lowerText(location);
+        category = lowerCase(category);
+        location = lowerCase(location);
         for (int i = 0; i < (int)complaints.size(); i++) {
-            if (lowerText(complaints[i]->category()).find(category) != string::npos &&
-                lowerText(complaints[i]->getLocation()).find(location) != string::npos) {
-                complaints[i]->display();
+            if (lowerCase(complaints[i]->getCategory()).find(category) != string::npos &&
+                lowerCase(complaints[i]->getLocation()).find(location) != string::npos) {
+                complaints[i]->show();
                 found = true;
             }
         }
@@ -467,195 +488,177 @@ public:
         string categories[] = {"", "Road", "Waste", "Drainage", "Water",
                                "Street Light", "Traffic", "Environment",
                                "Public Health", "Electricity", "Other"};
-        cout << "\n1. Road  2. Waste  3. Drainage  4. Water  5. Street Light\n"
-             << "6. Traffic  7. Environment  8. Public Health  9. Electricity  10. Other\n";
-        int type = askNumber("Category: ", 1, 10);
-        Complaint* item = makeComplaint(categories[type], nextId, citizen.getId(),
-                                        askRequired("Title: "),
-                                        askRequired("Description: "),
-                                        askRequired("Location: "));
-        item->setAutomaticPriority();
-        complaints.push_back(item);
-        notify(citizen.getId(), "CC-" + to_string(nextId) + " was submitted.");
-        history("CC-" + to_string(nextId) + ": complaint submitted");
-        cout << "Complaint created successfully. Your ID is CC-" << nextId++ << ".\n";
+        cout << "\n1.Road  2.Waste  3.Drainage  4.Water  5.Street Light\n"
+             << "6.Traffic  7.Environment  8.Public Health  9.Electricity  10.Other\n";
+        int choice = numberInput("Category: ", 1, 10);
+        Complaint* complaint = createComplaint(
+            categories[choice], nextId, citizen.getId(),
+            requiredInput("Title: "), requiredInput("Description: "),
+            requiredInput("Location: "));
+        complaint->setAutoPriority();
+        complaints.push_back(complaint);
+        addNotification(citizen.getId(), "CC-" + to_string(nextId) + " submitted.");
+        addHistory(nextId, "Submitted");
+        cout << "Created successfully. ID: CC-" << nextId++ << "\n";
         save();
     }
 
     void showAll() const {
-        if (complaints.empty()) cout << "No complaints found.\n";
-        for (int i = 0; i < (int)complaints.size(); i++) complaints[i]->display();
+        if (complaints.empty()) cout << "No complaints.\n";
+        for (int i = 0; i < (int)complaints.size(); i++) complaints[i]->show();
     }
 
-    void showMyComplaints(int citizenId) const {
+    void showMyComplaints(int userId) const {
         bool found = false;
         for (int i = 0; i < (int)complaints.size(); i++)
-            if (complaints[i]->getCitizenId() == citizenId) {
-                complaints[i]->display();
+            if (complaints[i]->getCitizenId() == userId) {
+                complaints[i]->show();
                 found = true;
             }
-        if (!found) cout << "You have no complaints.\n";
+        if (!found) cout << "No complaints.\n";
     }
 
-    void showStatus(Status wanted) const {
+    void showByStatus(Status status) const {
         bool found = false;
         for (int i = 0; i < (int)complaints.size(); i++)
-            if (complaints[i]->getStatus() == wanted) {
-                complaints[i]->display();
+            if (complaints[i]->getStatus() == status) {
+                complaints[i]->show();
                 found = true;
             }
-        if (!found) cout << "No " << statusName(wanted) << " complaints.\n";
+        if (!found) cout << "No " << statusText(status) << " complaints.\n";
+    }
+
+    void track(const Citizen& citizen) {
+        Complaint* complaint = selectComplaint();
+        if (!complaint) return;
+        if (complaint->getCitizenId() != citizen.getId())
+            cout << "This is not your complaint.\n";
+        else complaint->show();
+    }
+
+    void review() {
+        Complaint* complaint = selectComplaint();
+        if (complaint)
+            updateStatus(complaint, SUBMITTED, UNDER_REVIEW,
+                         "Your complaint is under review.");
+    }
+
+    void changePriority() {
+        Complaint* complaint = selectComplaint();
+        if (!complaint) return;
+        int choice = numberInput("1.Low  2.Medium  3.High  4.Critical: ", 1, 4);
+        if (!complaint->setPriority((Priority)(choice - 1))) {
+            cout << "Closed complaint cannot be changed.\n";
+            return;
+        }
+        addHistory(complaint->getId(), "Priority: " + priorityText((Priority)(choice - 1)));
+        cout << "Priority updated.\n";
+        save();
+    }
+
+    void assign(const Officer& officer) {
+        Complaint* complaint = selectComplaint();
+        if (!complaint) return;
+        string department = departmentFor(complaint->getCategory());
+        if (!complaint->assignTo(department, officer.getName())) {
+            cout << "Review the complaint first.\n";
+            return;
+        }
+        addNotification(complaint->getCitizenId(), "Assigned to " + department + ".");
+        addHistory(complaint->getId(), "Assigned to " + officer.getName());
+        cout << "Assigned to " << department << " and " << officer.getName() << ".\n";
+        save();
     }
 
     void showAssigned(const Officer& officer) const {
         bool found = false;
         for (int i = 0; i < (int)complaints.size(); i++)
             if (complaints[i]->getOfficer() == officer.getName() &&
-                complaints[i]->getStatus() >= ASSIGNED &&
-                complaints[i]->getStatus() <= RESOLVED) {
-                complaints[i]->display();
+                complaints[i]->getStatus() >= ASSIGNED) {
+                complaints[i]->show();
                 found = true;
             }
-        if (!found) cout << "No complaints assigned to you.\n";
-    }
-
-    void track(int citizenId) {
-        Complaint* item = chooseComplaint();
-        if (!item) return;
-        if (item->getCitizenId() != citizenId) cout << "This is not your complaint.\n";
-        else item->display();
-    }
-
-    void review(const Admin& admin) {
-        Complaint* item = chooseComplaint();
-        if (!item) return;
-        if (!item->changeStatus(SUBMITTED, UNDER_REVIEW)) {
-            cout << "Only Submitted complaints can be reviewed.\n";
-            return;
-        }
-        notify(item->getCitizenId(), "Your complaint is under review.");
-        history("CC-" + to_string(item->getId()) + ": reviewed by " + admin.getName());
-        cout << "Complaint moved to Under Review.\n";
-        save();
-    }
-
-    void changePriority() {
-        Complaint* item = chooseComplaint();
-        if (!item) return;
-        int value = askNumber("1. Low  2. Medium  3. High  4. Critical: ", 1, 4);
-        item->setPriority((Priority)(value - 1));
-        history("CC-" + to_string(item->getId()) + ": priority changed to " +
-                priorityName((Priority)(value - 1)));
-        cout << "Priority updated.\n";
-        save();
-    }
-
-    void assign(const Officer& officer) {
-        Complaint* item = chooseComplaint();
-        if (!item) return;
-        string department = departmentFor(item->category());
-        if (!item->assign(department, officer.getName())) {
-            cout << "Review the complaint before assignment.\n";
-            return;
-        }
-        notify(item->getCitizenId(), "Assigned to " + department + ".");
-        history("CC-" + to_string(item->getId()) + ": assigned to " + officer.getName());
-        cout << "Assigned to " << department << " and " << officer.getName() << ".\n";
-        save();
+        if (!found) cout << "No assigned complaints.\n";
     }
 
     void startWork(const Officer& officer) {
-        Complaint* item = chooseComplaint();
-        if (!item) return;
-        if (item->getOfficer() != officer.getName()) {
+        Complaint* complaint = selectComplaint();
+        if (!complaint) return;
+        if (complaint->getOfficer() != officer.getName()) {
             cout << "This complaint is not assigned to you.\n";
             return;
         }
-        if (!item->changeStatus(ASSIGNED, IN_PROGRESS)) {
-            cout << "Only Assigned complaints can be started.\n";
-            return;
-        }
-        notify(item->getCitizenId(), "Work on your complaint has started.");
-        history("CC-" + to_string(item->getId()) + ": work started");
-        cout << "Complaint is now In Progress.\n";
-        save();
+        updateStatus(complaint, ASSIGNED, IN_PROGRESS,
+                     "Work on your complaint has started.");
     }
 
     void resolve(const Officer& officer) {
-        Complaint* item = chooseComplaint();
-        if (!item) return;
-        if (item->getOfficer() != officer.getName()) {
+        Complaint* complaint = selectComplaint();
+        if (!complaint) return;
+        if (complaint->getOfficer() != officer.getName()) {
             cout << "This complaint is not assigned to you.\n";
             return;
         }
-        string note = askRequired("Resolution note: ");
-        if (!item->resolve(note)) {
-            cout << "Start the work before resolving it.\n";
+        string note = requiredInput("Resolution note: ");
+        if (!complaint->resolve(note)) {
+            cout << "Start the work first.\n";
             return;
         }
-        notify(item->getCitizenId(), "Your complaint has been resolved.");
-        history("CC-" + to_string(item->getId()) + ": resolved - " + note);
-        cout << "Complaint resolved successfully.\n";
+        addNotification(complaint->getCitizenId(), "Your complaint was resolved.");
+        addHistory(complaint->getId(), "Resolved - " + note);
+        cout << "Complaint resolved.\n";
         save();
     }
 
     void closeComplaint() {
-        Complaint* item = chooseComplaint();
-        if (!item) return;
-        if (!item->changeStatus(RESOLVED, CLOSED)) {
-            cout << "Only Resolved complaints can be closed.\n";
-            return;
-        }
-        notify(item->getCitizenId(), "Your complaint has been closed.");
-        history("CC-" + to_string(item->getId()) + ": closed");
-        cout << "Complaint closed.\n";
-        save();
+        Complaint* complaint = selectComplaint();
+        if (complaint)
+            updateStatus(complaint, RESOLVED, CLOSED,
+                         "Your complaint was closed.");
     }
 
     void support(const Citizen& citizen) {
-        Complaint* item = chooseComplaint();
-        if (!item) return;
-        if (item->addSupport(citizen.getId())) {
+        Complaint* complaint = selectComplaint();
+        if (!complaint) return;
+        if (complaint->support(citizen.getId())) {
             cout << "Support added.\n";
             save();
-        } else cout << "You already supported it, or it is closed.\n";
+        } else cout << "Already supported or complaint is closed.\n";
     }
 
     void feedback(const Citizen& citizen) {
-        Complaint* item = chooseComplaint();
-        if (!item) return;
-        if (item->getCitizenId() != citizen.getId()) {
-            cout << "You can only review your own complaint.\n";
+        Complaint* complaint = selectComplaint();
+        if (!complaint) return;
+        if (complaint->getCitizenId() != citizen.getId()) {
+            cout << "You can only review your complaint.\n";
             return;
         }
-        int stars = askNumber("Rating (1-5): ", 1, 5);
-        string comment = askRequired("Comment: ");
-        if (item->addFeedback(stars, comment)) {
-            history("CC-" + to_string(item->getId()) + ": citizen feedback added");
+        int stars = numberInput("Rating (1-5): ", 1, 5);
+        string comment = requiredInput("Comment: ");
+        if (complaint->feedback(stars, comment)) {
             cout << "Feedback saved.\n";
             save();
-        } else cout << "Feedback needs a resolved complaint and can be given once.\n";
+        } else cout << "Resolve it first. Feedback is allowed once.\n";
     }
 
-    void showNotifications(int userId) {
+    void notificationsFor(int userId) {
         bool found = false;
         cout << "\n=== NOTIFICATIONS ===\n";
         for (int i = 0; i < (int)notifications.size(); i++)
-            if (notifications[i].getUserId() == userId) {
-                cout << (notifications[i].isRead() ? "[Read] " : "[New]  ")
-                     << notifications[i].getMessage() << "\n";
-                notifications[i].markRead();
+            if (notifications[i].userId == userId) {
+                cout << (notifications[i].isRead ? "[Read] " : "[New]  ")
+                     << notifications[i].message << "\n";
+                notifications[i].isRead = true;
                 found = true;
             }
         if (!found) cout << "No notifications.\n";
         save();
     }
 
-    void usePoll(int citizenId) {
+    void vote(int userId) {
         poll.show();
-        int option = askNumber("Vote (1-3): ", 1, 3);
-        cout << (poll.vote(citizenId, option) ? "Vote accepted.\n" : "You already voted.\n");
-        poll.save(voteFile);
+        int choice = numberInput("Vote (1-3): ", 1, 3);
+        cout << (poll.vote(userId, choice) ? "Vote accepted.\n" : "Already voted.\n");
         poll.show();
     }
 
@@ -663,79 +666,76 @@ public:
         int count[6] = {0, 0, 0, 0, 0, 0};
         for (int i = 0; i < (int)complaints.size(); i++)
             count[complaints[i]->getStatus()]++;
-        cout << "\n=== ANALYTICS ===\nTotal         : " << complaints.size();
+        cout << "\n=== ANALYTICS ===\nTotal: " << complaints.size();
         for (int i = 0; i < 6; i++)
-            cout << "\n" << statusName((Status)i) << " : " << count[i];
-        int finished = count[RESOLVED] + count[CLOSED];
-        int rate = complaints.empty() ? 0 : finished * 100 / complaints.size();
+            cout << "\n" << statusText((Status)i) << ": " << count[i];
+        int done = count[RESOLVED] + count[CLOSED];
+        int rate = complaints.empty() ? 0 : done * 100 / complaints.size();
         cout << "\nResolution rate: " << rate << "%\n";
     }
 
-    void showHistory() const {
-        ifstream file(historyFile.c_str());
+    void history() const {
+        ifstream file("history.txt");
         string line;
         bool found = false;
-        cout << "\n=== COMPLAINT HISTORY ===\n";
+        cout << "\n=== HISTORY ===\n";
         while (getline(file, line)) {
             cout << "- " << line << "\n";
             found = true;
         }
-        if (!found) cout << "No history yet.\n";
+        if (!found) cout << "No history.\n";
     }
 };
 
-void citizenMenu(CivicCareSystem& system, const Citizen& citizen) {
+void citizenDashboard(CivicCareSystem& system, const Citizen& citizen) {
     int choice;
     do {
-        cout << "\n=== CITIZEN DASHBOARD ===\n"
-             << "1. Report complaint\n2. My complaints\n3. Track complaint\n"
-             << "4. Support complaint\n5. Civic poll\n6. Give feedback\n"
-             << "7. Notifications\n0. Back\n";
-        choice = askNumber("Choose: ", 0, 7);
+        cout << "\n=== CITIZEN ===\n"
+             << "1.Report  2.My complaints  3.Track  4.Support\n"
+             << "5.Poll  6.Feedback  7.Notifications  0.Back\n";
+        choice = numberInput("Choose: ", 0, 7);
         if (choice == 1) system.report(citizen);
         else if (choice == 2) system.showMyComplaints(citizen.getId());
-        else if (choice == 3) system.track(citizen.getId());
+        else if (choice == 3) system.track(citizen);
         else if (choice == 4) system.support(citizen);
-        else if (choice == 5) system.usePoll(citizen.getId());
+        else if (choice == 5) system.vote(citizen.getId());
         else if (choice == 6) system.feedback(citizen);
-        else if (choice == 7) system.showNotifications(citizen.getId());
+        else if (choice == 7) system.notificationsFor(citizen.getId());
     } while (choice != 0);
 }
 
-void authorityMenu(CivicCareSystem& system, const Admin& admin, const Officer& officer) {
+void adminDashboard(CivicCareSystem& system, const Officer& officer) {
     int choice;
     do {
-        cout << "\n=== AUTHORITY / ADMIN DASHBOARD ===\n"
-             << "1. View submitted\n2. Review complaint\n3. Set priority\n"
-             << "4. Assign department and officer\n5. Search category/location\n"
-             << "6. View all complaints\n7. Analytics\n8. Close resolved complaint\n"
-             << "9. View history\n0. Back\n";
-        choice = askNumber("Choose: ", 0, 9);
-        if (choice == 1) system.showStatus(SUBMITTED);
-        else if (choice == 2) system.review(admin);
+        cout << "\n=== AUTHORITY / ADMIN ===\n"
+             << "1.Submitted  2.Review  3.Set priority  4.Assign\n"
+             << "5.Search  6.All complaints  7.Analytics  8.Close\n"
+             << "9.History  0.Back\n";
+        choice = numberInput("Choose: ", 0, 9);
+        if (choice == 1) system.showByStatus(SUBMITTED);
+        else if (choice == 2) system.review();
         else if (choice == 3) system.changePriority();
         else if (choice == 4) system.assign(officer);
         else if (choice == 5)
-            system.searchComplaint(ask("Category (blank = all): "),
-                                   ask("Location (blank = all): "));
+            system.findComplaint(input("Category (blank = all): "),
+                                 input("Location (blank = all): "));
         else if (choice == 6) system.showAll();
         else if (choice == 7) system.analytics();
         else if (choice == 8) system.closeComplaint();
-        else if (choice == 9) system.showHistory();
+        else if (choice == 9) system.history();
     } while (choice != 0);
 }
 
-void officerMenu(CivicCareSystem& system, const Officer& officer) {
+void officerDashboard(CivicCareSystem& system, const Officer& officer) {
     int choice;
     do {
-        cout << "\n=== OFFICER DASHBOARD ===\n"
-             << "1. My assigned complaints\n2. Start work\n3. Resolve complaint\n"
-             << "4. View history\n0. Back\n";
-        choice = askNumber("Choose: ", 0, 4);
+        cout << "\n=== OFFICER ===\n"
+             << "1.Assigned complaints  2.Start work  3.Resolve  4.History  0.Back\n";
+        choice = numberInput("Choose: ", 0, 4);
         if (choice == 1) system.showAssigned(officer);
         else if (choice == 2) system.startWork(officer);
         else if (choice == 3) system.resolve(officer);
-        else if (choice == 4) system.showHistory();
+        else if (choice == 4) system.history();
     } while (choice != 0);
 }
 
@@ -744,27 +744,23 @@ int main() {
     Admin admin(2, "System Admin");
     Officer officer(3, "Local Officer");
     CivicCareSystem system;
-    vector<User*> users;
-    users.push_back(&citizen);
-    users.push_back(&admin);
-    users.push_back(&officer);
+    User* users[] = {&citizen, &admin, &officer};
 
     int choice;
     do {
         cout << "\n========================================\n"
              << "       CIVICCARE BANGLADESH\n"
              << "========================================\n"
-             << "1. Citizen dashboard\n2. Authority / Admin dashboard\n"
-             << "3. Officer dashboard\n4. Public complaint list\n"
-             << "5. Show OOP user roles\n0. Save and exit\n";
-        choice = askNumber("Choose: ", 0, 5);
-        if (choice == 1) citizenMenu(system, citizen);
-        else if (choice == 2) authorityMenu(system, admin, officer);
-        else if (choice == 3) officerMenu(system, officer);
+             << "1.Citizen  2.Authority/Admin  3.Officer\n"
+             << "4.Public complaints  5.OOP roles  0.Exit\n";
+        choice = numberInput("Choose: ", 0, 5);
+        if (choice == 1) citizenDashboard(system, citizen);
+        else if (choice == 2) adminDashboard(system, officer);
+        else if (choice == 3) officerDashboard(system, officer);
         else if (choice == 4) system.showAll();
         else if (choice == 5)
-            for (int i = 0; i < (int)users.size(); i++)
-                cout << users[i]->role() << ": " << users[i]->getName() << "\n";
+            for (int i = 0; i < 3; i++)
+                cout << users[i]->getRole() << ": " << users[i]->getName() << "\n";
     } while (choice != 0);
 
     cout << "Data saved. Goodbye.\n";

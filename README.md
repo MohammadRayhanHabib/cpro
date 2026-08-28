@@ -1,6 +1,8 @@
 # CivicCare Bangladesh
 
-A small, beginner-friendly C++ console project for managing public complaints. The complete program is kept in one `main.cpp` file so a new student can understand it easily.
+A beginner-friendly C++ console project for managing public complaints. The
+complete program intentionally stays in one `main.cpp` file and uses simple
+functions, loops, classes and text files.
 
 ## Workflow
 
@@ -18,6 +20,7 @@ Submitted -> Under Review -> Assigned -> In Progress -> Resolved -> Closed
 - One support and one poll vote per citizen
 - Resolution feedback, read/unread notifications and history
 - Status analytics and resolution-rate calculation
+- Input checks, duplicate-action prevention and invalid-status protection
 - Persistent local files: `complaints.txt`, `notifications.txt`, `votes.txt` and `history.txt`
 
 ## OOP used
@@ -27,7 +30,7 @@ Submitted -> Under Review -> Assigned -> In Progress -> Resolved -> Closed
 - **Inheritance:** `Citizen` and `Authority` inherit from `User`.
 - **Multilevel inheritance:** `Admin` and `Officer` inherit from `Authority`.
 - **Polymorphism:** complaint classes override `category()` and `riskScore()`.
-- **Overloading:** `searchComplaint()` works with an ID or category/location.
+- **Overloading:** `findComplaint()` works with an ID or category/location.
 
 ## Build and run
 
