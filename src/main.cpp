@@ -53,6 +53,48 @@ string lowerCase(string value) {
     return value;
 }
 
+bool onlyDigits(string value) {
+    if (value.empty()) return false;
+    for (int i = 0; i < (int)value.size(); i++)
+        if (!isdigit((unsigned char)value[i])) return false;
+    return true;
+}
+
+string validPhoneInput() {
+    while (true) {
+        string phone = input("Phone number: ");
+        if (onlyDigits(phone) && phone.size() >= 10 && phone.size() <= 15)
+            return phone;
+        cout << "Use 10 to 15 digits.\n";
+    }
+}
+
+string validNidInput() {
+    while (true) {
+        string nid = input("NID number: ");
+        if (onlyDigits(nid) && nid.size() >= 10 && nid.size() <= 17) return nid;
+        cout << "Use 10 to 17 digits.\n";
+    }
+}
+
+string validEmailInput() {
+    while (true) {
+        string email = input("Email: ");
+        if (email.find('@') != string::npos && email.find('.') != string::npos)
+            return lowerCase(email);
+        cout << "Enter a valid email.\n";
+    }
+}
+
+string validPasswordInput() {
+    while (true) {
+        string password = input("Password (minimum 4 characters): ");
+        if (password.size() >= 4 && password.find('|') == string::npos)
+            return password;
+        cout << "Use at least 4 characters and do not use |.\n";
+    }
+}
+
 enum Status { SUBMITTED, UNDER_REVIEW, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED };
 enum Priority { LOW, MEDIUM, HIGH, CRITICAL };
 
@@ -71,38 +113,237 @@ string priorityText(Priority priority) {
 class User {
 private:
     int id;
-    string name;
+    string name, nid, email, phone, address, password;
+    string governmentId, passport;
 
 public:
-    User(int userId, string userName) : id(userId), name(userName) {}
+    User(int userId, string userName, string userNid, string userEmail,
+         string userPhone, string userAddress, string userPassword,
+         string govtId = "None", string passportNumber = "None")
+        : id(userId), name(userName), nid(userNid), email(lowerCase(userEmail)),
+          phone(userPhone), address(userAddress), password(userPassword),
+          governmentId(govtId), passport(passportNumber) {}
+
     virtual ~User() {}
     int getId() const { return id; }
     string getName() const { return name; }
+    string getNid() const { return nid; }
+    string getEmail() const { return email; }
+    string getPhone() const { return phone; }
+    string getGovernmentId() const { return governmentId; }
+    string getPassport() const { return passport; }
     virtual string getRole() const = 0;
+
+    bool matches(string key, string enteredPassword) const {
+        key = lowerCase(key);
+        return password == enteredPassword &&
+               (key == lowerCase(nid) || key == email || key == lowerCase(phone) ||
+                key == lowerCase(governmentId) || key == lowerCase(passport));
+    }
+
+    string saveData() const {
+        return to_string(id) + "|" + getRole() + "|" + clean(name) + "|" +
+               clean(nid) + "|" + clean(email) + "|" + clean(phone) + "|" +
+               clean(address) + "|" + clean(password) + "|" +
+               clean(governmentId) + "|" + clean(passport);
+    }
+
+    virtual void showProfile() const {
+        cout << "\nID      : U-" << id << "\nName    : " << name
+             << "\nRole    : " << getRole() << "\nNID     : " << nid
+             << "\nEmail   : " << email << "\nPhone   : " << phone
+             << "\nAddress : " << address << "\n";
+    }
 };
 
 class Citizen : public User {
 public:
-    Citizen(int id, string name) : User(id, name) {}
+    Citizen(int id, string name, string nid, string email, string phone,
+            string address, string password)
+        : User(id, name, nid, email, phone, address, password) {}
     string getRole() const { return "Citizen"; }
 };
 
 class Authority : public User {
 public:
-    Authority(int id, string name) : User(id, name) {}
+    Authority(int id, string name, string nid, string email, string phone,
+              string address, string password, string govtId, string passport)
+        : User(id, name, nid, email, phone, address, password, govtId, passport) {}
     string getRole() const { return "Authority"; }
+
+    void showProfile() const {
+        User::showProfile();
+        cout << "Govt ID : " << getGovernmentId()
+             << "\nPassport: " << getPassport() << "\n";
+    }
 };
 
 class Admin : public Authority {
 public:
-    Admin(int id, string name) : Authority(id, name) {}
+    Admin(int id, string name, string nid, string email, string phone,
+          string address, string password, string govtId, string passport)
+        : Authority(id, name, nid, email, phone, address, password, govtId, passport) {}
     string getRole() const { return "Admin"; }
 };
 
 class Officer : public Authority {
 public:
-    Officer(int id, string name) : Authority(id, name) {}
+    Officer(int id, string name, string nid, string email, string phone,
+            string address, string password, string govtId, string passport)
+        : Authority(id, name, nid, email, phone, address, password, govtId, passport) {}
     string getRole() const { return "Officer"; }
+};
+
+User* createUser(int id, string role, string name, string nid, string email,
+                 string phone, string address, string password,
+                 string govtId, string passport) {
+    if (role == "Citizen")
+        return new Citizen(id, name, nid, email, phone, address, password);
+    if (role == "Admin")
+        return new Admin(id, name, nid, email, phone, address, password,
+                         govtId, passport);
+    if (role == "Officer")
+        return new Officer(id, name, nid, email, phone, address, password,
+                           govtId, passport);
+    return new Authority(id, name, nid, email, phone, address, password,
+                         govtId, passport);
+}
+
+class UserManager {
+private:
+    vector<User*> users;
+    int nextId;
+
+    bool duplicate(string nid, string email, string phone,
+                   string govtId = "None", string passport = "None") const {
+        for (int i = 0; i < (int)users.size(); i++)
+            if (users[i]->getNid() == nid || users[i]->getEmail() == lowerCase(email) ||
+                users[i]->getPhone() == phone ||
+                (govtId != "None" && lowerCase(users[i]->getGovernmentId()) == lowerCase(govtId)) ||
+                (passport != "None" && lowerCase(users[i]->getPassport()) == lowerCase(passport)))
+                return true;
+        return false;
+    }
+
+    void addDemoUsers() {
+        users.push_back(createUser(1, "Admin", "System Admin", "0000000001",
+                        "admin", "01000000001", "Dhaka", "admin123",
+                        "GOV-ADMIN-001", "A0000001"));
+        users.push_back(createUser(2, "Officer", "Local Officer", "0000000002",
+                        "officer", "01000000002", "Dhaka", "officer123",
+                        "GOV-OFFICER-001", "B0000001"));
+        nextId = 3;
+        save();
+    }
+
+public:
+    UserManager() : nextId(1) {
+        ifstream file("users.txt");
+        string line;
+        while (getline(file, line)) {
+            vector<string> data = split(line);
+            try {
+                if (data.size() == 10) {
+                    User* user = createUser(stoi(data[0]), data[1], data[2], data[3],
+                                            data[4], data[5], data[6], data[7],
+                                            data[8], data[9]);
+                    users.push_back(user);
+                    nextId = max(nextId, user->getId() + 1);
+                }
+            } catch (...) {
+                cout << "Warning: damaged user data skipped.\n";
+            }
+        }
+        if (users.empty()) addDemoUsers();
+    }
+
+    ~UserManager() {
+        save();
+        for (int i = 0; i < (int)users.size(); i++) delete users[i];
+    }
+
+    void save() const {
+        ofstream file("users.txt");
+        for (int i = 0; i < (int)users.size(); i++)
+            file << users[i]->saveData() << "\n";
+    }
+
+    void citizenSignUp() {
+        cout << "\n=== CITIZEN SIGN UP ===\n";
+        string nid = validNidInput();
+        string email = validEmailInput();
+        string phone = validPhoneInput();
+        if (duplicate(nid, email, phone)) {
+            cout << "[ERROR] NID, email or phone is already registered.\n";
+            return;
+        }
+        string name = requiredInput("Full name: ");
+        string address = requiredInput("Address: ");
+        string password = validPasswordInput();
+        users.push_back(new Citizen(nextId++, name, nid, email, phone,
+                                    address, password));
+        save();
+        cout << "[SUCCESS] Citizen account created. You can now login.\n";
+    }
+
+    void staffSignUp() {
+        cout << "\n=== GOVERNMENT STAFF SIGN UP ===\n"
+             << "1. Authority  2. Officer  3. Admin\n";
+        int choice = numberInput("Role: ", 1, 3);
+        string roles[] = {"", "Authority", "Officer", "Admin"};
+        string nid = validNidInput();
+        string govtId = requiredInput("Government ID: ");
+        string passport = requiredInput("Passport number: ");
+        string email = validEmailInput();
+        string phone = validPhoneInput();
+        if (duplicate(nid, email, phone, govtId, passport)) {
+            cout << "[ERROR] Identity information is already registered.\n";
+            return;
+        }
+        string name = requiredInput("Full name: ");
+        string address = requiredInput("Address: ");
+        string password = validPasswordInput();
+        users.push_back(createUser(nextId++, roles[choice], name, nid, email,
+                                   phone, address, password, govtId, passport));
+        save();
+        cout << "[SUCCESS] " << roles[choice] << " account created.\n";
+    }
+
+    User* login() {
+        cout << "\n=== LOGIN ===\n";
+        string key = requiredInput("NID, email, phone, Govt ID or passport: ");
+        string password = input("Password: ");
+        for (int i = 0; i < (int)users.size(); i++)
+            if (users[i]->matches(key, password)) {
+                cout << "[SUCCESS] Welcome, " << users[i]->getName() << ".\n";
+                return users[i];
+            }
+        cout << "[ERROR] Login information did not match.\n";
+        return NULL;
+    }
+
+    string selectOfficer() const {
+        vector<User*> officers;
+        for (int i = 0; i < (int)users.size(); i++)
+            if (users[i]->getRole() == "Officer") officers.push_back(users[i]);
+        if (officers.empty()) {
+            cout << "No registered officer.\n";
+            return "";
+        }
+        cout << "\nRegistered officers\n";
+        for (int i = 0; i < (int)officers.size(); i++)
+            cout << i + 1 << ". " << officers[i]->getName() << "\n";
+        int choice = numberInput("Officer: ", 1, officers.size());
+        return officers[choice - 1]->getName();
+    }
+
+    void showUsers() const {
+        cout << "\n=== REGISTERED USERS ===\n";
+        for (int i = 0; i < (int)users.size(); i++)
+            cout << "U-" << users[i]->getId() << " | " << users[i]->getRole()
+                 << " | " << users[i]->getName() << " | "
+                 << users[i]->getEmail() << "\n";
+    }
 };
 
 class Notification {
@@ -187,7 +428,7 @@ public:
     }
 
     bool feedback(int stars, string feedbackComment) {
-        if (status < RESOLVED || rating != 0) return false;
+        if (status != RESOLVED || rating != 0) return false;
         rating = stars;
         comment = feedbackComment;
         return true;
@@ -556,17 +797,18 @@ public:
         save();
     }
 
-    void assign(const Officer& officer) {
+    void assign(string officerName) {
+        if (officerName.empty()) return;
         Complaint* complaint = selectComplaint();
         if (!complaint) return;
         string department = departmentFor(complaint->getCategory());
-        if (!complaint->assignTo(department, officer.getName())) {
+        if (!complaint->assignTo(department, officerName)) {
             cout << "Review the complaint first.\n";
             return;
         }
         addNotification(complaint->getCitizenId(), "Assigned to " + department + ".");
-        addHistory(complaint->getId(), "Assigned to " + officer.getName());
-        cout << "Assigned to " << department << " and " << officer.getName() << ".\n";
+        addHistory(complaint->getId(), "Assigned to " + officerName);
+        cout << "Assigned to " << department << " and " << officerName << ".\n";
         save();
     }
 
@@ -620,6 +862,10 @@ public:
     void support(const Citizen& citizen) {
         Complaint* complaint = selectComplaint();
         if (!complaint) return;
+        if (complaint->getCitizenId() == citizen.getId()) {
+            cout << "You cannot support your own complaint.\n";
+            return;
+        }
         if (complaint->support(citizen.getId())) {
             cout << "Support added.\n";
             save();
@@ -690,10 +936,10 @@ public:
 void citizenDashboard(CivicCareSystem& system, const Citizen& citizen) {
     int choice;
     do {
-        cout << "\n=== CITIZEN ===\n"
+        cout << "\n=== CITIZEN DASHBOARD ===\n"
              << "1.Report  2.My complaints  3.Track  4.Support\n"
-             << "5.Poll  6.Feedback  7.Notifications  0.Back\n";
-        choice = numberInput("Choose: ", 0, 7);
+             << "5.Poll  6.Feedback  7.Notifications  8.Profile  0.Logout\n";
+        choice = numberInput("Choose: ", 0, 8);
         if (choice == 1) system.report(citizen);
         else if (choice == 2) system.showMyComplaints(citizen.getId());
         else if (choice == 3) system.track(citizen);
@@ -701,21 +947,26 @@ void citizenDashboard(CivicCareSystem& system, const Citizen& citizen) {
         else if (choice == 5) system.vote(citizen.getId());
         else if (choice == 6) system.feedback(citizen);
         else if (choice == 7) system.notificationsFor(citizen.getId());
+        else if (choice == 8) citizen.showProfile();
     } while (choice != 0);
 }
 
-void adminDashboard(CivicCareSystem& system, const Officer& officer) {
+void authorityDashboard(CivicCareSystem& system, const User& user,
+                        const UserManager& userManager) {
     int choice;
     do {
-        cout << "\n=== AUTHORITY / ADMIN ===\n"
+        cout << "\n=== " << user.getRole() << " DASHBOARD ===\n"
              << "1.Submitted  2.Review  3.Set priority  4.Assign\n"
              << "5.Search  6.All complaints  7.Analytics  8.Close\n"
-             << "9.History  0.Back\n";
-        choice = numberInput("Choose: ", 0, 9);
+             << "9.History  10.Profile";
+        if (user.getRole() == "Admin") cout << "  11.View users";
+        cout << "  0.Logout\n";
+        int maximum = user.getRole() == "Admin" ? 11 : 10;
+        choice = numberInput("Choose: ", 0, maximum);
         if (choice == 1) system.showByStatus(SUBMITTED);
         else if (choice == 2) system.review();
         else if (choice == 3) system.changePriority();
-        else if (choice == 4) system.assign(officer);
+        else if (choice == 4) system.assign(userManager.selectOfficer());
         else if (choice == 5)
             system.findComplaint(input("Category (blank = all): "),
                                  input("Location (blank = all): "));
@@ -723,44 +974,50 @@ void adminDashboard(CivicCareSystem& system, const Officer& officer) {
         else if (choice == 7) system.analytics();
         else if (choice == 8) system.closeComplaint();
         else if (choice == 9) system.history();
+        else if (choice == 10) user.showProfile();
+        else if (choice == 11 && user.getRole() == "Admin") userManager.showUsers();
     } while (choice != 0);
 }
 
 void officerDashboard(CivicCareSystem& system, const Officer& officer) {
     int choice;
     do {
-        cout << "\n=== OFFICER ===\n"
-             << "1.Assigned complaints  2.Start work  3.Resolve  4.History  0.Back\n";
-        choice = numberInput("Choose: ", 0, 4);
+        cout << "\n=== OFFICER DASHBOARD ===\n"
+             << "1.Assigned complaints  2.Start work  3.Resolve\n"
+             << "4.History  5.Profile  0.Logout\n";
+        choice = numberInput("Choose: ", 0, 5);
         if (choice == 1) system.showAssigned(officer);
         else if (choice == 2) system.startWork(officer);
         else if (choice == 3) system.resolve(officer);
         else if (choice == 4) system.history();
+        else if (choice == 5) officer.showProfile();
     } while (choice != 0);
 }
 
 int main() {
-    Citizen citizen(1, "Rahim");
-    Admin admin(2, "System Admin");
-    Officer officer(3, "Local Officer");
+    UserManager userManager;
     CivicCareSystem system;
-    User* users[] = {&citizen, &admin, &officer};
 
     int choice;
     do {
         cout << "\n========================================\n"
              << "       CIVICCARE BANGLADESH\n"
              << "========================================\n"
-             << "1.Citizen  2.Authority/Admin  3.Officer\n"
-             << "4.Public complaints  5.OOP roles  0.Exit\n";
-        choice = numberInput("Choose: ", 0, 5);
-        if (choice == 1) citizenDashboard(system, citizen);
-        else if (choice == 2) adminDashboard(system, officer);
-        else if (choice == 3) officerDashboard(system, officer);
-        else if (choice == 4) system.showAll();
-        else if (choice == 5)
-            for (int i = 0; i < 3; i++)
-                cout << users[i]->getRole() << ": " << users[i]->getName() << "\n";
+             << "1.Citizen sign up\n2.Government staff sign up\n"
+             << "3.Login\n4.Public complaints\n0.Exit\n";
+        choice = numberInput("Choose: ", 0, 4);
+        if (choice == 1) userManager.citizenSignUp();
+        else if (choice == 2) userManager.staffSignUp();
+        else if (choice == 3) {
+            User* user = userManager.login();
+            if (!user) continue;
+            if (user->getRole() == "Citizen")
+                citizenDashboard(system, *dynamic_cast<Citizen*>(user));
+            else if (user->getRole() == "Officer")
+                officerDashboard(system, *dynamic_cast<Officer*>(user));
+            else
+                authorityDashboard(system, *user, userManager);
+        } else if (choice == 4) system.showAll();
     } while (choice != 0);
 
     cout << "Data saved. Goodbye.\n";

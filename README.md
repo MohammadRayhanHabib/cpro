@@ -12,6 +12,10 @@ Submitted -> Under Review -> Assigned -> In Progress -> Resolved -> Closed
 
 ## Working features
 
+- Citizen signup with NID, email, phone, address and password
+- Authority, Officer and Admin signup with NID, Govt ID and passport
+- Persistent login using NID, email, phone, Govt ID or passport plus password
+- Duplicate identity checks, wrong-password protection and role-based dashboards
 - Separate Citizen, Authority/Admin and Officer dashboards
 - 10 complaint categories, automatic IDs and editable priority
 - Validated workflow: review, assign, start work, resolve and close
@@ -21,7 +25,7 @@ Submitted -> Under Review -> Assigned -> In Progress -> Resolved -> Closed
 - Resolution feedback, read/unread notifications and history
 - Status analytics and resolution-rate calculation
 - Input checks, duplicate-action prevention and invalid-status protection
-- Persistent local files: `complaints.txt`, `notifications.txt`, `votes.txt` and `history.txt`
+- Persistent local files: `users.txt`, `complaints.txt`, `notifications.txt`, `votes.txt` and `history.txt`
 
 ## OOP used
 
@@ -29,7 +33,7 @@ Submitted -> Under Review -> Assigned -> In Progress -> Resolved -> Closed
 - **Encapsulation:** user and complaint data are private.
 - **Inheritance:** `Citizen` and `Authority` inherit from `User`.
 - **Multilevel inheritance:** `Admin` and `Officer` inherit from `Authority`.
-- **Polymorphism:** complaint classes override `category()` and `riskScore()`.
+- **Polymorphism:** complaint classes override `getCategory()` and `getRisk()`.
 - **Overloading:** `findComplaint()` works with an ID or category/location.
 
 ## Build and run
@@ -42,3 +46,16 @@ g++ -std=c++11 -Wall -Wextra -pedantic src\main.cpp -o civiccare.exe
 For a complete demo, submit a complaint from the Citizen dashboard, review and
 assign it from the Authority dashboard, then start and resolve it from the
 Officer dashboard. No external library, database or internet connection is needed.
+
+## First login
+
+Two demo staff accounts are created automatically when `users.txt` does not exist:
+
+```text
+Admin   : admin / admin123
+Officer : officer / officer123
+```
+
+New users can sign up from the main menu. Login accepts a saved NID, email,
+phone, Govt ID or passport together with the correct password. All account
+information stays in the local `users.txt` file.
