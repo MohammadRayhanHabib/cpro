@@ -13,8 +13,8 @@ Submitted -> Under Review -> Assigned -> In Progress -> Resolved -> Closed
 ## Working features
 
 - Citizen signup with NID, email, phone, address and password
-- Authority, Officer and Admin signup with NID, Govt ID and passport
-- Persistent login using NID, email, phone, Govt ID or passport plus password
+- Authority, Officer and Admin signup with Job ID, NID, email, phone and passport
+- Persistent login using Job ID, NID, email, phone or passport plus password
 - Duplicate identity checks, wrong-password protection and role-based dashboards
 - Separate Citizen, Authority/Admin and Officer dashboards
 - 10 complaint categories; every new complaint starts with `Low` priority
@@ -57,6 +57,6 @@ Admin   : admin / admin123
 Officer : officer / officer123
 ```
 
-New users can sign up from the main menu. Login accepts a saved NID, email,
-phone, Govt ID or passport together with the correct password. All account
+New users can sign up from the main menu. Login accepts a saved Job ID, NID,
+email, phone or passport together with the correct password. All account
 information stays in the local `users.txt` file.

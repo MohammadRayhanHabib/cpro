@@ -105,38 +105,38 @@ class User {
 private:
     int id;
     string name, nid, email, phone, address, password;
-    string governmentId, passport;
+    string jobId, passport;
 public:
     User(int userId, string userName, string userNid, string userEmail, string userPhone, string userAddress, string userPassword,
-         string govtId = "None", string passportNumber = "None")
+         string userJobId = "None", string passportNumber = "None")
         : id(userId), name(userName), nid(userNid), email(lowerCase(userEmail)),
           phone(userPhone), address(userAddress), password(userPassword),
-          governmentId(govtId), passport(passportNumber) {}
+          jobId(userJobId), passport(passportNumber) {}
     virtual ~User() {}
     int getId() const { return id; }
     string getName() const { return name; }
     string getNid() const { return nid; }
     string getEmail() const { return email; }
     string getPhone() const { return phone; }
-    string getGovernmentId() const { return governmentId; }
+    string getJobId() const { return jobId; }
     string getPassport() const { return passport; }
     virtual string getRole() const = 0;
     bool matches(string key, string enteredPassword) const {
         key = lowerCase(key);
         return password == enteredPassword && (key == lowerCase(nid) || key == email || key == lowerCase(phone) ||
-                key == lowerCase(governmentId) || key == lowerCase(passport));
+                key == lowerCase(jobId) || key == lowerCase(passport));
     }
     string saveData() const {
         return to_string(id) + "|" + getRole() + "|" + clean(name) + "|" + clean(nid) + "|" + clean(email) + "|" + clean(phone) + "|" +
                clean(address) + "|" + clean(password) + "|" +
-               clean(governmentId) + "|" + clean(passport);
+               clean(jobId) + "|" + clean(passport);
     }
     virtual void showProfile() const {
         cout << "\nID      : U-" << id << "\nName    : " << name << "\nRole    : " << getRole() << "\nNID     : " << nid
              << "\nEmail   : " << email << "\nPhone   : " << phone
              << "\nAddress : " << address << "\n";
         if (getRole() != "Citizen")
-            cout << "Govt ID : " << governmentId << "\nPassport: " << passport << "\n";
+            cout << "Job ID  : " << jobId << "\nPassport: " << passport << "\n";
     }
 };
 class Citizen : public User {
@@ -147,39 +147,39 @@ public:
 };
 class Authority : public User {
 public:
-    Authority(int id, string name, string nid, string email, string phone, string address, string password, string govtId, string passport)
-        : User(id, name, nid, email, phone, address, password, govtId, passport) {}
+    Authority(int id, string name, string nid, string email, string phone, string address, string password, string jobId, string passport)
+        : User(id, name, nid, email, phone, address, password, jobId, passport) {}
     string getRole() const { return "Authority"; }
 };
 class Admin : public Authority {
 public:
-    Admin(int id, string name, string nid, string email, string phone, string address, string password, string govtId, string passport)
-        : Authority(id, name, nid, email, phone, address, password, govtId, passport) {}
+    Admin(int id, string name, string nid, string email, string phone, string address, string password, string jobId, string passport)
+        : Authority(id, name, nid, email, phone, address, password, jobId, passport) {}
     string getRole() const { return "Admin"; }
 };
 class Officer : public Authority {
 public:
-    Officer(int id, string name, string nid, string email, string phone, string address, string password, string govtId, string passport)
-        : Authority(id, name, nid, email, phone, address, password, govtId, passport) {}
+    Officer(int id, string name, string nid, string email, string phone, string address, string password, string jobId, string passport)
+        : Authority(id, name, nid, email, phone, address, password, jobId, passport) {}
     string getRole() const { return "Officer"; }
 };
-User* createUser(int id, string role, string name, string nid, string email, string phone, string address, string password, string govtId, string passport) {
+User* createUser(int id, string role, string name, string nid, string email, string phone, string address, string password, string jobId, string passport) {
     if (role == "Citizen")
         return new Citizen(id, name, nid, email, phone, address, password);
     if (role == "Admin")
-        return new Admin(id, name, nid, email, phone, address, password, govtId, passport);
+        return new Admin(id, name, nid, email, phone, address, password, jobId, passport);
     if (role == "Officer")
-        return new Officer(id, name, nid, email, phone, address, password, govtId, passport);
-    return new Authority(id, name, nid, email, phone, address, password, govtId, passport);
+        return new Officer(id, name, nid, email, phone, address, password, jobId, passport);
+    return new Authority(id, name, nid, email, phone, address, password, jobId, passport);
 }
 class UserManager {
 private:
     vector<User*> users;
     int nextId;
-    bool duplicate(string nid, string email, string phone, string govtId = "None", string passport = "None") const {
+    bool duplicate(string nid, string email, string phone, string jobId = "None", string passport = "None") const {
         for (int i = 0; i < (int)users.size(); i++)
             if (users[i]->getNid() == nid || users[i]->getEmail() == lowerCase(email) || users[i]->getPhone() == phone ||
-                (govtId != "None" && lowerCase(users[i]->getGovernmentId()) == lowerCase(govtId)) ||
+                (jobId != "None" && lowerCase(users[i]->getJobId()) == lowerCase(jobId)) ||
                 (passport != "None" && lowerCase(users[i]->getPassport()) == lowerCase(passport)))
                 return true;
         return false;
@@ -238,25 +238,25 @@ public:
         cout << "\n=== GOVERNMENT STAFF SIGN UP ===\n" << "1. Authority  2. Officer  3. Admin\n";
         int choice = numberInput("Role: ", 1, 3);
         string roles[] = {"", "Authority", "Officer", "Admin"};
+        string jobId = identifierInput("Job ID: ");
         string nid = validNidInput();
-        string govtId = identifierInput("Government ID: ");
-        string passport = identifierInput("Passport number: ");
         string email = validEmailInput();
         string phone = validPhoneInput();
-        if (duplicate(nid, email, phone, govtId, passport)) {
+        string passport = identifierInput("Passport number: ");
+        if (duplicate(nid, email, phone, jobId, passport)) {
             cout << "[ERROR] Identity information is already registered.\n";
             return;
         }
         string name = requiredInput("Full name: ");
         string address = requiredInput("Address: ");
         string password = validPasswordInput();
-        users.push_back(createUser(nextId++, roles[choice], name, nid, email, phone, address, password, govtId, passport));
+        users.push_back(createUser(nextId++, roles[choice], name, nid, email, phone, address, password, jobId, passport));
         save();
         cout << "[SUCCESS] " << roles[choice] << " account created.\n";
     }
     User* login() {
         cout << "\n=== LOGIN ===\n";
-        string key = requiredInput("NID, email, phone, Govt ID or passport: ");
+        string key = requiredInput("NID, email, phone, Job ID or passport: ");
         string password = input("Password: ");
         for (int i = 0; i < (int)users.size(); i++)
             if (users[i]->matches(key, password)) {
