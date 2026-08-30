@@ -1,3 +1,4 @@
+// ==================== LIBRARIES ====================
 #include <algorithm>
 #include <fstream>
 #include <iostream>
@@ -5,6 +6,8 @@
 #include <string>
 #include <vector>
 using namespace std;
+
+// ==================== INPUT AND VALIDATION ====================
 string input(string message) {
     string value;
     cout << message;
@@ -89,6 +92,7 @@ string validPasswordInput() {
         cout << "Use at least 4 characters and do not use |.\n";
     }
 }
+// ==================== STATUS AND PRIORITY ====================
 enum Status { SUBMITTED, UNDER_REVIEW, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED };
 enum Priority { LOW, MEDIUM, HIGH, CRITICAL };
 string statusText(Status status) {
@@ -100,7 +104,8 @@ string priorityText(Priority priority) {
     string names[] = {"Low", "Medium", "High", "Critical"};
     return names[priority];
 }
-// Abstraction and inheritance
+// ==================== ABSTRACT USER CLASS ====================
+// Uses abstraction and encapsulation.
 class User {
 private:
     int id;
@@ -139,6 +144,8 @@ public:
             cout << "Job ID  : " << jobId << "\nPassport: " << passport << "\n";
     }
 };
+// ==================== USER TYPES ====================
+// Uses inheritance and polymorphism.
 class Citizen : public User {
 public:
     Citizen(int id, string name, string nid, string email, string phone, string address, string password)
@@ -163,6 +170,7 @@ public:
         : Authority(id, name, nid, email, phone, address, password, jobId, passport) {}
     string getRole() const { return "Officer"; }
 };
+// ==================== USER FACTORY ====================
 User* createUser(int id, string role, string name, string nid, string email, string phone, string address, string password, string jobId, string passport) {
     if (role == "Citizen")
         return new Citizen(id, name, nid, email, phone, address, password);
@@ -172,6 +180,7 @@ User* createUser(int id, string role, string name, string nid, string email, str
         return new Officer(id, name, nid, email, phone, address, password, jobId, passport);
     return new Authority(id, name, nid, email, phone, address, password, jobId, passport);
 }
+// ==================== USER MANAGEMENT ====================
 class UserManager {
 private:
     vector<User*> users;
@@ -287,6 +296,7 @@ public:
             cout << "U-" << users[i]->getId() << " | " << users[i]->getRole() << " | " << users[i]->getName() << " | " << users[i]->getEmail() << "\n";
     }
 };
+// ==================== NOTIFICATIONS ====================
 class Notification {
 public:
     int userId;
@@ -298,7 +308,8 @@ public:
         return to_string(userId) + "|" + to_string(isRead) + "|" + clean(message);
     }
 };
-// Encapsulation and runtime polymorphism
+// ==================== ABSTRACT COMPLAINT CLASS ====================
+// Uses abstraction, encapsulation and runtime polymorphism.
 class Complaint {
 private:
     int id, citizenId, officerId, rating;
@@ -398,6 +409,8 @@ public:
                to_string(rating) + "|" + clean(comment);
     }
 };
+// ==================== COMPLAINT TYPES ====================
+// Each type inherits from Complaint.
 class RoadComplaint : public Complaint {
 public:
     RoadComplaint(int id, int owner, string title, string details, string location)
@@ -425,6 +438,7 @@ public:
           category(type) {}
     string getCategory() const { return category; }
 };
+// ==================== COMPLAINT FACTORY ====================
 Complaint* createComplaint(string category, int id, int owner, string title, string description, string location) {
     if (category == "Road")
         return new RoadComplaint(id, owner, title, description, location);
@@ -434,6 +448,7 @@ Complaint* createComplaint(string category, int id, int owner, string title, str
         return new DrainageComplaint(id, owner, title, description, location);
     return new OtherComplaint(id, owner, title, description, location, category);
 }
+// ==================== PUBLIC POLL ====================
 class Poll {
 private:
     vector<int> voters, choices;
@@ -471,6 +486,7 @@ public:
         return true;
     }
 };
+// ==================== FILE HANDLING ====================
 class FileManager {
 public:
     static void saveComplaints(const vector<Complaint*>& complaints) {
@@ -537,6 +553,7 @@ public:
         file << clean(text) << "\n";
     }
 };
+// ==================== COMPLAINT MANAGEMENT ====================
 class CivicCareSystem {
 private:
     vector<Complaint*> complaints;
@@ -805,6 +822,7 @@ public:
         if (!found) cout << "No assigned history.\n";
     }
 };
+// ==================== USER DASHBOARDS ====================
 void citizenDashboard(CivicCareSystem& system, const Citizen& citizen) {
     int choice;
     do {
@@ -860,6 +878,7 @@ void officerDashboard(CivicCareSystem& system, const Officer& officer) {
         else if (choice == 5) officer.showProfile();
     } while (choice != 0);
 }
+// ==================== PROGRAM START ====================
 int main() {
     UserManager userManager;
     CivicCareSystem system;
