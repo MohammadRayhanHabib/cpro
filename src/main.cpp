@@ -80,9 +80,18 @@ string validNidInput() {
 string validEmailInput() {
     while (true) {
         string email = input("Email: ");
-        if (email.find('@') != string::npos && email.find('.') != string::npos)
+        if (email.find('@') != string::npos && email.find('.') != string::npos &&
+            email.find('|') == string::npos)
             return lowerCase(email);
         cout << "Enter a valid email.\n";
+    }
+}
+
+string identifierInput(string message) {
+    while (true) {
+        string value = input(message);
+        if (!value.empty() && value.find('|') == string::npos) return value;
+        cout << "Value cannot be empty or contain |.\n";
     }
 }
 
@@ -153,6 +162,9 @@ public:
              << "\nRole    : " << getRole() << "\nNID     : " << nid
              << "\nEmail   : " << email << "\nPhone   : " << phone
              << "\nAddress : " << address << "\n";
+        if (getRole() != "Citizen")
+            cout << "Govt ID : " << governmentId
+                 << "\nPassport: " << passport << "\n";
     }
 };
 
@@ -170,12 +182,6 @@ public:
               string address, string password, string govtId, string passport)
         : User(id, name, nid, email, phone, address, password, govtId, passport) {}
     string getRole() const { return "Authority"; }
-
-    void showProfile() const {
-        User::showProfile();
-        cout << "Govt ID : " << getGovernmentId()
-             << "\nPassport: " << getPassport() << "\n";
-    }
 };
 
 class Admin : public Authority {
@@ -292,8 +298,8 @@ public:
         int choice = numberInput("Role: ", 1, 3);
         string roles[] = {"", "Authority", "Officer", "Admin"};
         string nid = validNidInput();
-        string govtId = requiredInput("Government ID: ");
-        string passport = requiredInput("Passport number: ");
+        string govtId = identifierInput("Government ID: ");
+        string passport = identifierInput("Passport number: ");
         string email = validEmailInput();
         string phone = validPhoneInput();
         if (duplicate(nid, email, phone, govtId, passport)) {
@@ -322,19 +328,21 @@ public:
         return NULL;
     }
 
-    string selectOfficer() const {
-        vector<User*> officers;
+    Officer* selectOfficer() const {
+        vector<Officer*> officers;
         for (int i = 0; i < (int)users.size(); i++)
-            if (users[i]->getRole() == "Officer") officers.push_back(users[i]);
+            if (users[i]->getRole() == "Officer")
+                officers.push_back(dynamic_cast<Officer*>(users[i]));
         if (officers.empty()) {
             cout << "No registered officer.\n";
-            return "";
+            return NULL;
         }
         cout << "\nRegistered officers\n";
         for (int i = 0; i < (int)officers.size(); i++)
-            cout << i + 1 << ". " << officers[i]->getName() << "\n";
-        int choice = numberInput("Officer: ", 1, officers.size());
-        return officers[choice - 1]->getName();
+            cout << i + 1 << ". U-" << officers[i]->getId()
+                 << " - " << officers[i]->getName() << "\n";
+        int choice = numberInput("Officer: ", 1, (int)officers.size());
+        return officers[choice - 1];
     }
 
     void showUsers() const {
@@ -363,7 +371,7 @@ public:
 // Encapsulation and runtime polymorphism
 class Complaint {
 private:
-    int id, citizenId, rating;
+    int id, citizenId, officerId, rating;
     string title, description, location, department, officer;
     string resolution, comment;
     vector<int> supporters;
@@ -373,7 +381,7 @@ private:
 public:
     Complaint(int complaintId, int ownerId, string complaintTitle,
               string details, string place)
-        : id(complaintId), citizenId(ownerId), rating(0),
+        : id(complaintId), citizenId(ownerId), officerId(0), rating(0),
           title(complaintTitle), description(details), location(place),
           department("Not assigned"), officer("Not assigned"),
           resolution("None"), comment("None"),
@@ -381,17 +389,14 @@ public:
 
     virtual ~Complaint() {}
     virtual string getCategory() const = 0;
-    virtual int getRisk() const = 0;
 
     int getId() const { return id; }
     int getCitizenId() const { return citizenId; }
     string getLocation() const { return location; }
-    string getOfficer() const { return officer; }
     Status getStatus() const { return status; }
 
-    void setAutoPriority() {
-        int risk = getRisk();
-        priority = risk == 1 ? LOW : risk == 2 ? MEDIUM : risk == 3 ? HIGH : CRITICAL;
+    bool assignedTo(int userId, string userName) const {
+        return officerId > 0 ? officerId == userId : officer == userName;
     }
 
     bool setPriority(Priority newPriority) {
@@ -406,9 +411,10 @@ public:
         return true;
     }
 
-    bool assignTo(string departmentName, string officerName) {
+    bool assignTo(string departmentName, int assignedOfficerId, string officerName) {
         if (!moveStatus(UNDER_REVIEW, ASSIGNED)) return false;
         department = departmentName;
+        officerId = assignedOfficerId;
         officer = officerName;
         return true;
     }
@@ -435,12 +441,13 @@ public:
     }
 
     void restore(Priority oldPriority, Status oldStatus, vector<int> oldSupporters,
-                 string oldDepartment, string oldOfficer, string oldResolution,
+                 string oldDepartment, int oldOfficerId, string oldOfficer, string oldResolution,
                  int oldRating, string oldComment) {
         priority = oldPriority;
         status = oldStatus;
         supporters = oldSupporters;
         department = oldDepartment;
+        officerId = oldOfficerId;
         officer = oldOfficer;
         resolution = oldResolution;
         rating = oldRating;
@@ -473,8 +480,9 @@ public:
         return to_string(id) + "|" + to_string(citizenId) + "|" + getCategory() +
                "|" + clean(title) + "|" + clean(description) + "|" + clean(location) +
                "|" + to_string(priority) + "|" + to_string(status) + "|" +
-               supporterData + "|" + clean(department) + "|" + clean(officer) +
-               "|" + clean(resolution) + "|" + to_string(rating) + "|" + clean(comment);
+               supporterData + "|" + clean(department) + "|" + to_string(officerId) +
+               "|" + clean(officer) + "|" + clean(resolution) + "|" +
+               to_string(rating) + "|" + clean(comment);
     }
 };
 
@@ -483,7 +491,6 @@ public:
     RoadComplaint(int id, int owner, string title, string details, string location)
         : Complaint(id, owner, title, details, location) {}
     string getCategory() const { return "Road"; }
-    int getRisk() const { return 2; }
 };
 
 class WasteComplaint : public Complaint {
@@ -491,7 +498,6 @@ public:
     WasteComplaint(int id, int owner, string title, string details, string location)
         : Complaint(id, owner, title, details, location) {}
     string getCategory() const { return "Waste"; }
-    int getRisk() const { return 1; }
 };
 
 class DrainageComplaint : public Complaint {
@@ -499,21 +505,18 @@ public:
     DrainageComplaint(int id, int owner, string title, string details, string location)
         : Complaint(id, owner, title, details, location) {}
     string getCategory() const { return "Drainage"; }
-    int getRisk() const { return 3; }
 };
 
 class OtherComplaint : public Complaint {
 private:
     string category;
-    int risk;
 
 public:
     OtherComplaint(int id, int owner, string title, string details, string location,
-                   string type, int riskScore)
+                   string type)
         : Complaint(id, owner, title, details, location),
-          category(type), risk(riskScore) {}
+          category(type) {}
     string getCategory() const { return category; }
-    int getRisk() const { return risk; }
 };
 
 Complaint* createComplaint(string category, int id, int owner, string title,
@@ -524,8 +527,7 @@ Complaint* createComplaint(string category, int id, int owner, string title,
         return new WasteComplaint(id, owner, title, description, location);
     if (category == "Drainage")
         return new DrainageComplaint(id, owner, title, description, location);
-    int risk = (category == "Electricity" || category == "Public Health") ? 3 : 2;
-    return new OtherComplaint(id, owner, title, description, location, category, risk);
+    return new OtherComplaint(id, owner, title, description, location, category);
 }
 
 class Poll {
@@ -591,20 +593,28 @@ public:
                 vector<int> supporters;
 
                 if (data.size() == 12) { // Old file support
+                    int savedStatus = stoi(data[6]);
+                    if (savedStatus < SUBMITTED || savedStatus > CLOSED) continue;
                     complaint = createComplaint(data[2], stoi(data[0]), stoi(data[1]),
                                                 data[3], data[4], data[5]);
                     for (int i = 0; i < stoi(data[7]); i++) supporters.push_back(-i - 1);
-                    complaint->restore(LOW, (Status)stoi(data[6]), supporters,
-                                       data[8], data[9], data[10], stoi(data[11]), "None");
-                } else if (data.size() == 14) {
+                    complaint->restore(LOW, (Status)savedStatus, supporters,
+                                       data[8], 0, data[9], data[10], stoi(data[11]), "None");
+                } else if (data.size() == 14 || data.size() == 15) {
+                    int savedPriority = stoi(data[6]), savedStatus = stoi(data[7]);
+                    if (savedPriority < LOW || savedPriority > CRITICAL ||
+                        savedStatus < SUBMITTED || savedStatus > CLOSED) continue;
                     complaint = createComplaint(data[2], stoi(data[0]), stoi(data[1]),
                                                 data[3], data[4], data[5]);
                     vector<string> ids = split(data[8], ',');
                     for (int i = 0; i < (int)ids.size(); i++)
                         if (!ids[i].empty()) supporters.push_back(stoi(ids[i]));
-                    complaint->restore((Priority)stoi(data[6]), (Status)stoi(data[7]),
-                                       supporters, data[9], data[10], data[11],
-                                       stoi(data[12]), data[13]);
+                    int extra = data.size() == 15 ? 1 : 0;
+                    int officerId = extra ? stoi(data[10]) : 0;
+                    complaint->restore((Priority)savedPriority, (Status)savedStatus,
+                                       supporters, data[9], officerId, data[10 + extra],
+                                       data[11 + extra], stoi(data[12 + extra]),
+                                       data[13 + extra]);
                 }
 
                 if (complaint) {
@@ -736,7 +746,6 @@ public:
             categories[choice], nextId, citizen.getId(),
             requiredInput("Title: "), requiredInput("Description: "),
             requiredInput("Location: "));
-        complaint->setAutoPriority();
         complaints.push_back(complaint);
         addNotification(citizen.getId(), "CC-" + to_string(nextId) + " submitted.");
         addHistory(nextId, "Submitted");
@@ -797,25 +806,24 @@ public:
         save();
     }
 
-    void assign(string officerName) {
-        if (officerName.empty()) return;
+    void assign(const Officer& officer) {
         Complaint* complaint = selectComplaint();
         if (!complaint) return;
         string department = departmentFor(complaint->getCategory());
-        if (!complaint->assignTo(department, officerName)) {
+        if (!complaint->assignTo(department, officer.getId(), officer.getName())) {
             cout << "Review the complaint first.\n";
             return;
         }
         addNotification(complaint->getCitizenId(), "Assigned to " + department + ".");
-        addHistory(complaint->getId(), "Assigned to " + officerName);
-        cout << "Assigned to " << department << " and " << officerName << ".\n";
+        addHistory(complaint->getId(), "Assigned to " + officer.getName());
+        cout << "Assigned to " << department << " and " << officer.getName() << ".\n";
         save();
     }
 
     void showAssigned(const Officer& officer) const {
         bool found = false;
         for (int i = 0; i < (int)complaints.size(); i++)
-            if (complaints[i]->getOfficer() == officer.getName() &&
+            if (complaints[i]->assignedTo(officer.getId(), officer.getName()) &&
                 complaints[i]->getStatus() >= ASSIGNED) {
                 complaints[i]->show();
                 found = true;
@@ -826,7 +834,7 @@ public:
     void startWork(const Officer& officer) {
         Complaint* complaint = selectComplaint();
         if (!complaint) return;
-        if (complaint->getOfficer() != officer.getName()) {
+        if (!complaint->assignedTo(officer.getId(), officer.getName())) {
             cout << "This complaint is not assigned to you.\n";
             return;
         }
@@ -837,7 +845,7 @@ public:
     void resolve(const Officer& officer) {
         Complaint* complaint = selectComplaint();
         if (!complaint) return;
-        if (complaint->getOfficer() != officer.getName()) {
+        if (!complaint->assignedTo(officer.getId(), officer.getName())) {
             cout << "This complaint is not assigned to you.\n";
             return;
         }
@@ -931,6 +939,25 @@ public:
         }
         if (!found) cout << "No history.\n";
     }
+
+    void officerHistory(const Officer& officer) const {
+        ifstream file("history.txt");
+        string line;
+        bool found = false;
+        cout << "\n=== MY ASSIGNED HISTORY ===\n";
+        while (getline(file, line)) {
+            for (int i = 0; i < (int)complaints.size(); i++) {
+                string prefix = "CC-" + to_string(complaints[i]->getId()) + ":";
+                if (line.find(prefix) == 0 &&
+                    complaints[i]->assignedTo(officer.getId(), officer.getName())) {
+                    cout << "- " << line << "\n";
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if (!found) cout << "No assigned history.\n";
+    }
 };
 
 void citizenDashboard(CivicCareSystem& system, const Citizen& citizen) {
@@ -966,7 +993,10 @@ void authorityDashboard(CivicCareSystem& system, const User& user,
         if (choice == 1) system.showByStatus(SUBMITTED);
         else if (choice == 2) system.review();
         else if (choice == 3) system.changePriority();
-        else if (choice == 4) system.assign(userManager.selectOfficer());
+        else if (choice == 4) {
+            Officer* officer = userManager.selectOfficer();
+            if (officer) system.assign(*officer);
+        }
         else if (choice == 5)
             system.findComplaint(input("Category (blank = all): "),
                                  input("Location (blank = all): "));
@@ -989,7 +1019,7 @@ void officerDashboard(CivicCareSystem& system, const Officer& officer) {
         if (choice == 1) system.showAssigned(officer);
         else if (choice == 2) system.startWork(officer);
         else if (choice == 3) system.resolve(officer);
-        else if (choice == 4) system.history();
+        else if (choice == 4) system.officerHistory(officer);
         else if (choice == 5) officer.showProfile();
     } while (choice != 0);
 }

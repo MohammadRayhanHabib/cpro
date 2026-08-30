@@ -17,7 +17,8 @@ Submitted -> Under Review -> Assigned -> In Progress -> Resolved -> Closed
 - Persistent login using NID, email, phone, Govt ID or passport plus password
 - Duplicate identity checks, wrong-password protection and role-based dashboards
 - Separate Citizen, Authority/Admin and Officer dashboards
-- 10 complaint categories, automatic IDs and editable priority
+- 10 complaint categories; every new complaint starts with `Low` priority
+- Authority can manually change priority to Low, Medium, High or Critical
 - Validated workflow: review, assign, start work, resolve and close
 - Automatic department mapping and officer assignment
 - My complaints, ID tracking and category/location search
@@ -33,7 +34,7 @@ Submitted -> Under Review -> Assigned -> In Progress -> Resolved -> Closed
 - **Encapsulation:** user and complaint data are private.
 - **Inheritance:** `Citizen` and `Authority` inherit from `User`.
 - **Multilevel inheritance:** `Admin` and `Officer` inherit from `Authority`.
-- **Polymorphism:** complaint classes override `getCategory()` and `getRisk()`.
+- **Polymorphism:** complaint classes override `getCategory()`.
 - **Overloading:** `findComplaint()` works with an ID or category/location.
 
 ## Build and run
