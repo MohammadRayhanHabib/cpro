@@ -1,5 +1,6 @@
 // ==================== LIBRARIES ====================
 #include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -8,10 +9,16 @@
 using namespace std;
 
 // ==================== INPUT AND VALIDATION ====================
+enum InputAction { BACK_TO_MENU, EXIT_PROGRAM };
 string input(string message) {
     string value;
     cout << message;
-    getline(cin, value);
+    if (!getline(cin, value)) throw EXIT_PROGRAM;
+    string command = value;
+    for (int i = 0; i < (int)command.size(); i++)
+        command[i] = (char)tolower((unsigned char)command[i]);
+    if (command == "exit" || command == "/exit") throw EXIT_PROGRAM;
+    if (command == "back" || command == "/back") throw BACK_TO_MENU;
     return value;
 }
 string requiredInput(string message) {
@@ -244,7 +251,7 @@ public:
         cout << "[SUCCESS] Citizen account created. You can now login.\n";
     }
     void staffSignUp() {
-        cout << "\n=== GOVERNMENT STAFF SIGN UP ===\n" << "1. Authority  2. Officer  3. Admin\n";
+        cout << "\n=== GOVERNMENT STAFF SIGN UP ===\n\n1. Authority\n\n2. Officer\n\n3. Admin\n\n";
         int choice = numberInput("Role: ", 1, 3);
         string roles[] = {"", "Authority", "Officer", "Admin"};
         string jobId = identifierInput("Job ID: ");
@@ -286,7 +293,7 @@ public:
         }
         cout << "\nRegistered officers\n";
         for (int i = 0; i < (int)officers.size(); i++)
-            cout << i + 1 << ". U-" << officers[i]->getId() << " - " << officers[i]->getName() << "\n";
+            cout << i + 1 << ". U-" << officers[i]->getId() << " - " << officers[i]->getName() << "\n\n";
         int choice = numberInput("Officer: ", 1, (int)officers.size());
         return officers[choice - 1];
     }
@@ -331,6 +338,7 @@ public:
     int getCitizenId() const { return citizenId; }
     string getLocation() const { return location; }
     Status getStatus() const { return status; }
+    Priority getPriority() const { return priority; }
     bool assignedTo(int userId, string userName) const {
         return officerId > 0 ? officerId == userId : officer == userName;
     }
@@ -457,7 +465,7 @@ public:
         ifstream file("votes.txt");
         int userId, choice;
         while (file >> userId >> choice)
-            if (choice >= 1 && choice <= 3) {
+            if (choice >= 1 && choice <= 3 && find(voters.begin(), voters.end(), userId) == voters.end()) {
                 voters.push_back(userId);
                 choices.push_back(choice);
             }
@@ -474,8 +482,17 @@ public:
         cout << "\nWhich issue needs attention first?\n";
         for (int i = 0; i < 3; i++) {
             int percent = choices.empty() ? 0 : count[i] * 100 / choices.size();
-            cout << i + 1 << ". " << options[i] << " - " << count[i] << " vote(s), " << percent << "%\n";
+            cout << i + 1 << ". " << options[i] << " - " << count[i] << " vote(s), " << percent << "%\n\n";
         }
+    }
+    // Percentage uses votes actually cast, not the number of registered users.
+    bool isCritical(string category) const {
+        if (choices.empty()) return false;
+        string options[] = {"Road", "Waste", "Drainage"};
+        int count = 0;
+        for (int i = 0; i < (int)choices.size(); i++)
+            if (options[choices[i] - 1] == category) count++;
+        return count * 100LL >= (long long)choices.size() * 70;
     }
     bool vote(int userId, int choice) {
         for (int i = 0; i < (int)voters.size(); i++)
@@ -560,6 +577,18 @@ private:
     vector<Notification> notifications;
     Poll poll;
     int nextId;
+    void applyPollPriority() {
+        for (int i = 0; i < (int)complaints.size(); i++) {
+            Complaint* complaint = complaints[i];
+            if (complaint->getStatus() == CLOSED || complaint->getPriority() == CRITICAL ||
+                !poll.isCritical(complaint->getCategory())) continue;
+            complaint->setPriority(CRITICAL);
+            addHistory(complaint->getId(), "Poll reached 70% or more - priority: Critical");
+            addNotification(complaint->getCitizenId(), "CC-" + to_string(complaint->getId()) + " is Critical after the public poll.");
+            cout << "CC-" << complaint->getId() << ": poll priority changed to Critical.\n";
+        }
+        save();
+    }
     void save() {
         FileManager::saveComplaints(complaints);
         FileManager::saveNotifications(notifications);
@@ -602,6 +631,7 @@ public:
         nextId = FileManager::loadComplaints(complaints);
         FileManager::loadNotifications(notifications);
         poll.load();
+        applyPollPriority();
     }
     ~CivicCareSystem() {
         save();
@@ -625,19 +655,25 @@ public:
         }
         if (!found) cout << "No matching complaint.\n";
     }
-    void report(const Citizen& citizen) {
+    void report(const Citizen& citizen, bool emergency = false) {
         string categories[] = {"", "Road", "Waste", "Drainage", "Water",
                                "Street Light", "Traffic", "Environment",
                                "Public Health", "Electricity", "Other"};
-        cout << "\n1.Road  2.Waste  3.Drainage  4.Water  5.Street Light\n" << "6.Traffic  7.Environment  8.Public Health  9.Electricity  10.Other\n";
+        cout << (emergency ? "\n=== EMERGENCY COMPLAINT ===\n" : "\n=== REPORT COMPLAINT ===\n");
+        for (int i = 1; i <= 10; i++) cout << "\n" << i << ". " << categories[i] << "\n";
         int choice = numberInput("Category: ", 1, 10);
-        Complaint* complaint = createComplaint( categories[choice], nextId, citizen.getId(), requiredInput("Title: "), requiredInput("Description: "),
-            requiredInput("Location: "));
+        string title = requiredInput("Title: ");
+        string description = requiredInput("Description: ");
+        string location = requiredInput("Location: ");
+        Complaint* complaint = createComplaint(categories[choice], nextId, citizen.getId(), title, description, location);
+        if (emergency) complaint->setPriority(CRITICAL);
         complaints.push_back(complaint);
         addNotification(citizen.getId(), "CC-" + to_string(nextId) + " submitted.");
         addHistory(nextId, "Submitted");
+        if (emergency) addHistory(nextId, "Emergency complaint - priority: Critical");
         cout << "Created successfully. ID: CC-" << nextId++ << "\n";
-        save();
+        if (emergency) cout << "Emergency priority: Critical.\n";
+        applyPollPriority();
     }
     void showAll() const {
         if (complaints.empty()) cout << "No complaints.\n";
@@ -676,7 +712,11 @@ public:
     void changePriority() {
         Complaint* complaint = selectComplaint();
         if (!complaint) return;
-        int choice = numberInput("1.Low  2.Medium  3.High  4.Critical: ", 1, 4);
+        int choice = numberInput("\n1. Low\n\n2. Medium\n\n3. High\n\n4. Critical\n\nPriority: ", 1, 4);
+        if (choice != 4 && poll.isCritical(complaint->getCategory())) {
+            cout << "This category has at least 70% of poll votes; priority must stay Critical.\n";
+            return;
+        }
         if (!complaint->setPriority((Priority)(choice - 1))) {
             cout << "Closed complaint cannot be changed.\n";
             return;
@@ -780,6 +820,7 @@ public:
         poll.show();
         int choice = numberInput("Vote (1-3): ", 1, 3);
         cout << (poll.vote(userId, choice) ? "Vote accepted.\n" : "Already voted.\n");
+        applyPollPriority();
         poll.show();
     }
     void analytics() const {
@@ -824,11 +865,12 @@ public:
 };
 // ==================== USER DASHBOARDS ====================
 void citizenDashboard(CivicCareSystem& system, const Citizen& citizen) {
-    int choice;
+    int choice = -1;
     do {
-        cout << "\n=== CITIZEN DASHBOARD ===\n" << "1.Report  2.My complaints  3.Track  4.Support\n"
-             << "5.Poll  6.Feedback  7.Notifications  8.Profile  0.Logout\n";
-        choice = numberInput("Choose: ", 0, 8);
+        try {
+        cout << "\n=== CITIZEN DASHBOARD ===\n\n1. Report complaint\n\n2. View my complaints\n\n3. Track complaint\n\n4. Support complaint\n\n"
+             << "5. Poll\n\n6. Feedback\n\n7. Notifications\n\n8. Profile\n\n9. Emergency complaint\n\n0. Logout\n\n";
+        choice = numberInput("Choose: ", 0, 9);
         if (choice == 1) system.report(citizen);
         else if (choice == 2) system.showMyComplaints(citizen.getId());
         else if (choice == 3) system.track(citizen);
@@ -837,16 +879,22 @@ void citizenDashboard(CivicCareSystem& system, const Citizen& citizen) {
         else if (choice == 6) system.feedback(citizen);
         else if (choice == 7) system.notificationsFor(citizen.getId());
         else if (choice == 8) citizen.showProfile();
+        else if (choice == 9) system.report(citizen, true);
+        } catch (InputAction action) {
+            if (action == EXIT_PROGRAM) throw;
+            cout << "Back to menu. Unfinished input cancelled.\n";
+        }
     } while (choice != 0);
 }
 void authorityDashboard(CivicCareSystem& system, const User& user, const UserManager& userManager) {
-    int choice;
+    int choice = -1;
     do {
-        cout << "\n=== " << user.getRole() << " DASHBOARD ===\n" << "1.Submitted  2.Review  3.Set priority  4.Assign\n"
-             << "5.Search  6.All complaints  7.Analytics  8.Close\n"
-             << "9.History  10.Profile";
-        if (user.getRole() == "Admin") cout << "  11.View users";
-        cout << "  0.Logout\n";
+        try {
+        cout << "\n=== " << user.getRole() << " DASHBOARD ===\n\n1. Submitted\n\n2. Review\n\n3. Set priority\n\n4. Assign\n\n"
+             << "5. Search\n\n6. All complaints\n\n7. Analytics\n\n8. Close complaint\n\n"
+             << "9. History\n\n10. Profile\n\n";
+        if (user.getRole() == "Admin") cout << "11. View users\n\n";
+        cout << "0. Logout\n\n";
         int maximum = user.getRole() == "Admin" ? 11 : 10;
         choice = numberInput("Choose: ", 0, maximum);
         if (choice == 1) system.showByStatus(SUBMITTED);
@@ -856,37 +904,52 @@ void authorityDashboard(CivicCareSystem& system, const User& user, const UserMan
             Officer* officer = userManager.selectOfficer();
             if (officer) system.assign(*officer);
         }
-        else if (choice == 5)
-            system.findComplaint(input("Category (blank = all): "), input("Location (blank = all): "));
+        else if (choice == 5) {
+            string category = input("Category (blank = all): ");
+            string location = input("Location (blank = all): ");
+            system.findComplaint(category, location);
+        }
         else if (choice == 6) system.showAll();
         else if (choice == 7) system.analytics();
         else if (choice == 8) system.closeComplaint();
         else if (choice == 9) system.history();
         else if (choice == 10) user.showProfile();
         else if (choice == 11 && user.getRole() == "Admin") userManager.showUsers();
+        } catch (InputAction action) {
+            if (action == EXIT_PROGRAM) throw;
+            cout << "Back to menu. Unfinished input cancelled.\n";
+        }
     } while (choice != 0);
 }
 void officerDashboard(CivicCareSystem& system, const Officer& officer) {
-    int choice;
+    int choice = -1;
     do {
-        cout << "\n=== OFFICER DASHBOARD ===\n" << "1.Assigned complaints  2.Start work  3.Resolve\n" << "4.History  5.Profile  0.Logout\n";
+        try {
+        cout << "\n=== OFFICER DASHBOARD ===\n\n1. Assigned complaints\n\n2. Start work\n\n3. Resolve\n\n4. History\n\n5. Profile\n\n0. Logout\n\n";
         choice = numberInput("Choose: ", 0, 5);
         if (choice == 1) system.showAssigned(officer);
         else if (choice == 2) system.startWork(officer);
         else if (choice == 3) system.resolve(officer);
         else if (choice == 4) system.officerHistory(officer);
         else if (choice == 5) officer.showProfile();
+        } catch (InputAction action) {
+            if (action == EXIT_PROGRAM) throw;
+            cout << "Back to menu. Unfinished input cancelled.\n";
+        }
     } while (choice != 0);
 }
 // ==================== PROGRAM START ====================
 int main() {
+    try {
     UserManager userManager;
     CivicCareSystem system;
-    int choice;
+    cout << "At any input: back = return to menu, exit = save and quit.\n";
+    int choice = -1;
     do {
+        try {
         cout << "\n========================================\n" << "       CIVICCARE BANGLADESH\n" << "========================================\n"
-             << "1.Citizen sign up\n2.Government staff sign up\n"
-             << "3.Login\n4.Public complaints\n0.Exit\n";
+             << "\n1. Citizen sign up\n\n2. Government staff sign up\n\n"
+             << "3. Login\n\n4. Public complaints\n\n0. Exit\n\n";
         choice = numberInput("Choose: ", 0, 4);
         if (choice == 1) userManager.citizenSignUp();
         else if (choice == 2) userManager.staffSignUp();
@@ -900,7 +963,14 @@ int main() {
             else
                 authorityDashboard(system, *user, userManager);
         } else if (choice == 4) system.showAll();
+        } catch (InputAction action) {
+            if (action == EXIT_PROGRAM) throw;
+            cout << "Back to menu. Unfinished input cancelled.\n";
+        }
     } while (choice != 0);
+    } catch (InputAction) {
+        // Local objects are destroyed first, so their save() methods still run.
+    }
     cout << "Data saved. Goodbye.\n";
     return 0;
 }
