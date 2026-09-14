@@ -99,6 +99,10 @@ string validPasswordInput() {
         cout << "Use at least 4 characters and do not use |.\n";
     }
 }
+// ==================== COMPLAINT CATEGORIES ====================
+const string categories[] = {"", "Road", "Waste", "Drainage", "Water",
+    "Street Light", "Traffic", "Environment", "Public Health", "Electricity", "Other"};
+const int CATEGORY_COUNT = 10;
 // ==================== STATUS AND PRIORITY ====================
 enum Status { SUBMITTED, UNDER_REVIEW, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED };
 enum Priority { LOW, MEDIUM, HIGH, CRITICAL };
@@ -251,7 +255,7 @@ public:
         cout << "[SUCCESS] Citizen account created. You can now login.\n";
     }
     void staffSignUp() {
-        cout << "\n=== GOVERNMENT STAFF SIGN UP ===\n\n1. Authority\n\n2. Officer\n\n3. Admin\n\n";
+        cout << "\n=== GOVERNMENT STAFF SIGN UP ===\n\n1. Authority\n2. Officer\n3. Admin\n";
         int choice = numberInput("Role: ", 1, 3);
         string roles[] = {"", "Authority", "Officer", "Admin"};
         string jobId = identifierInput("Job ID: ");
@@ -293,7 +297,7 @@ public:
         }
         cout << "\nRegistered officers\n";
         for (int i = 0; i < (int)officers.size(); i++)
-            cout << i + 1 << ". U-" << officers[i]->getId() << " - " << officers[i]->getName() << "\n\n";
+            cout << i + 1 << ". U-" << officers[i]->getId() << " - " << officers[i]->getName() << "\n";
         int choice = numberInput("Officer: ", 1, (int)officers.size());
         return officers[choice - 1];
     }
@@ -459,46 +463,46 @@ Complaint* createComplaint(string category, int id, int owner, string title, str
 // ==================== PUBLIC POLL ====================
 class Poll {
 private:
-    vector<int> voters, choices;
+    vector<int> voters, complaintIds;
+    bool alreadyVoted(int userId, int complaintId) const {
+        for (int i = 0; i < (int)voters.size(); i++)
+            if (voters[i] == userId && complaintIds[i] == complaintId) return true;
+        return false;
+    }
 public:
     void load() {
-        ifstream file("votes.txt");
-        int userId, choice;
-        while (file >> userId >> choice)
-            if (choice >= 1 && choice <= 3 && find(voters.begin(), voters.end(), userId) == voters.end()) {
-                voters.push_back(userId);
-                choices.push_back(choice);
-            }
-    }
-    void save() const {
-        ofstream file("votes.txt");
-        for (int i = 0; i < (int)voters.size(); i++)
-            file << voters[i] << " " << choices[i] << "\n";
-    }
-    void show() const {
-        string options[] = {"Road", "Waste", "Drainage"};
-        int count[] = {0, 0, 0};
-        for (int i = 0; i < (int)choices.size(); i++) count[choices[i] - 1]++;
-        cout << "\nWhich issue needs attention first?\n";
-        for (int i = 0; i < 3; i++) {
-            int percent = choices.empty() ? 0 : count[i] * 100 / choices.size();
-            cout << i + 1 << ". " << options[i] << " - " << count[i] << " vote(s), " << percent << "%\n\n";
+        // Old votes.txt contains category votes, so keep it separate.
+        ifstream file("complaint_votes.txt");
+        string line;
+        while (getline(file, line)) {
+            stringstream row(line);
+            int userId, complaintId;
+            char extra;
+            if (!(row >> userId >> complaintId) || row >> extra ||
+                userId <= 0 || complaintId <= 0 || alreadyVoted(userId, complaintId)) continue;
+            voters.push_back(userId);
+            complaintIds.push_back(complaintId);
         }
     }
-    // Percentage uses votes actually cast, not the number of registered users.
-    bool isCritical(string category) const {
-        if (choices.empty()) return false;
-        string options[] = {"Road", "Waste", "Drainage"};
-        int count = 0;
-        for (int i = 0; i < (int)choices.size(); i++)
-            if (options[choices[i] - 1] == category) count++;
-        return count * 100LL >= (long long)choices.size() * 70;
-    }
-    bool vote(int userId, int choice) {
+    void save() const {
+        ofstream file("complaint_votes.txt");
         for (int i = 0; i < (int)voters.size(); i++)
-            if (voters[i] == userId) return false;
+            file << voters[i] << " " << complaintIds[i] << "\n";
+    }
+    int countVotes(int complaintId) const {
+        int count = 0;
+        for (int i = 0; i < (int)complaintIds.size(); i++)
+            if (complaintIds[i] == complaintId) count++;
+        return count;
+    }
+    // More than 50 different users means 51 or more votes.
+    bool isCritical(int complaintId) const {
+        return countVotes(complaintId) > 50;
+    }
+    bool vote(int userId, int complaintId) {
+        if (alreadyVoted(userId, complaintId)) return false;
         voters.push_back(userId);
-        choices.push_back(choice);
+        complaintIds.push_back(complaintId);
         save();
         return true;
     }
@@ -581,9 +585,9 @@ private:
         for (int i = 0; i < (int)complaints.size(); i++) {
             Complaint* complaint = complaints[i];
             if (complaint->getStatus() == CLOSED || complaint->getPriority() == CRITICAL ||
-                !poll.isCritical(complaint->getCategory())) continue;
+                !poll.isCritical(complaint->getId())) continue;
             complaint->setPriority(CRITICAL);
-            addHistory(complaint->getId(), "Poll reached 70% or more - priority: Critical");
+            addHistory(complaint->getId(), "Complaint received more than 50 user votes - priority: Critical");
             addNotification(complaint->getCitizenId(), "CC-" + to_string(complaint->getId()) + " is Critical after the public poll.");
             cout << "CC-" << complaint->getId() << ": poll priority changed to Critical.\n";
         }
@@ -656,12 +660,9 @@ public:
         if (!found) cout << "No matching complaint.\n";
     }
     void report(const Citizen& citizen, bool emergency = false) {
-        string categories[] = {"", "Road", "Waste", "Drainage", "Water",
-                               "Street Light", "Traffic", "Environment",
-                               "Public Health", "Electricity", "Other"};
         cout << (emergency ? "\n=== EMERGENCY COMPLAINT ===\n" : "\n=== REPORT COMPLAINT ===\n");
-        for (int i = 1; i <= 10; i++) cout << "\n" << i << ". " << categories[i] << "\n";
-        int choice = numberInput("Category: ", 1, 10);
+        for (int i = 1; i <= CATEGORY_COUNT; i++) cout << "\n" << i << ". " << categories[i] << "\n";
+        int choice = numberInput("Category: ", 1, CATEGORY_COUNT);
         string title = requiredInput("Title: ");
         string description = requiredInput("Description: ");
         string location = requiredInput("Location: ");
@@ -712,9 +713,9 @@ public:
     void changePriority() {
         Complaint* complaint = selectComplaint();
         if (!complaint) return;
-        int choice = numberInput("\n1. Low\n\n2. Medium\n\n3. High\n\n4. Critical\n\nPriority: ", 1, 4);
-        if (choice != 4 && poll.isCritical(complaint->getCategory())) {
-            cout << "This category has at least 70% of poll votes; priority must stay Critical.\n";
+        int choice = numberInput("\n1. Low\n2. Medium\n3. High\n4. Critical\nPriority: ", 1, 4);
+        if (choice != 4 && poll.isCritical(complaint->getId())) {
+            cout << "This complaint has more than 50 user votes; priority must stay Critical.\n";
             return;
         }
         if (!complaint->setPriority((Priority)(choice - 1))) {
@@ -817,11 +818,33 @@ public:
         save();
     }
     void vote(int userId) {
-        poll.show();
-        int choice = numberInput("Vote (1-3): ", 1, 3);
-        cout << (poll.vote(userId, choice) ? "Vote accepted.\n" : "Already voted.\n");
+        cout << "\n=== COMPLAINT POLL ===\n51 different users' votes make a complaint Critical.\n";
+        for (int category = 1; category <= CATEGORY_COUNT; category++) {
+            cout << "\n=== " << categories[category] << " ===\n";
+            bool found = false;
+            for (int i = 0; i < (int)complaints.size(); i++) {
+                if (complaints[i]->getCategory() != categories[category]) continue;
+                complaints[i]->show();
+                cout << "Poll votes   : " << poll.countVotes(complaints[i]->getId()) << "\n";
+                found = true;
+            }
+            if (!found) cout << "No complaints in this category.\n";
+        }
+        if (complaints.empty()) return;
+        cout << "\nChoose a complaint from any category above. Type back to cancel.\n";
+        Complaint* complaint = selectComplaint();
+        if (!complaint) return;
+        if (complaint->getStatus() == CLOSED) {
+            cout << "Closed complaints cannot receive votes.\n";
+            return;
+        }
+        if (!poll.vote(userId, complaint->getId())) {
+            cout << "Already voted for this complaint.\n";
+            return;
+        }
+        cout << "Vote accepted for CC-" << complaint->getId()
+             << ". Total votes: " << poll.countVotes(complaint->getId()) << "\n";
         applyPollPriority();
-        poll.show();
     }
     void analytics() const {
         int count[6] = {0, 0, 0, 0, 0, 0};
@@ -868,8 +891,8 @@ void citizenDashboard(CivicCareSystem& system, const Citizen& citizen) {
     int choice = -1;
     do {
         try {
-        cout << "\n=== CITIZEN DASHBOARD ===\n\n1. Report complaint\n\n2. View my complaints\n\n3. Track complaint\n\n4. Support complaint\n\n"
-             << "5. Poll\n\n6. Feedback\n\n7. Notifications\n\n8. Profile\n\n9. Emergency complaint\n\n0. Logout\n\n";
+        cout << "\n=== CITIZEN DASHBOARD ===\n1. Report complaint\n2. View my complaints\n3. Track complaint\n4. Support complaint\n"
+             << "5. Poll\n6. Feedback\n7. Notifications\n8. Profile\n9. Emergency complaint\n0. Logout\n";
         choice = numberInput("Choose: ", 0, 9);
         if (choice == 1) system.report(citizen);
         else if (choice == 2) system.showMyComplaints(citizen.getId());
@@ -890,11 +913,11 @@ void authorityDashboard(CivicCareSystem& system, const User& user, const UserMan
     int choice = -1;
     do {
         try {
-        cout << "\n=== " << user.getRole() << " DASHBOARD ===\n\n1. Submitted\n\n2. Review\n\n3. Set priority\n\n4. Assign\n\n"
-             << "5. Search\n\n6. All complaints\n\n7. Analytics\n\n8. Close complaint\n\n"
-             << "9. History\n\n10. Profile\n\n";
-        if (user.getRole() == "Admin") cout << "11. View users\n\n";
-        cout << "0. Logout\n\n";
+        cout << "\n=== " << user.getRole() << " DASHBOARD ===\n1. Submitted\n2. Review\n3. Set priority\n4. Assign\n"
+             << "5. Search\n6. All complaints\n7. Analytics\n8. Close complaint\n"
+             << "9. History\n10. Profile\n";
+        if (user.getRole() == "Admin") cout << "11. View users\n";
+        cout << "0. Logout\n";
         int maximum = user.getRole() == "Admin" ? 11 : 10;
         choice = numberInput("Choose: ", 0, maximum);
         if (choice == 1) system.showByStatus(SUBMITTED);
@@ -925,7 +948,7 @@ void officerDashboard(CivicCareSystem& system, const Officer& officer) {
     int choice = -1;
     do {
         try {
-        cout << "\n=== OFFICER DASHBOARD ===\n\n1. Assigned complaints\n\n2. Start work\n\n3. Resolve\n\n4. History\n\n5. Profile\n\n0. Logout\n\n";
+        cout << "\n=== OFFICER DASHBOARD ===\n1. Assigned complaints\n2. Start work\n3. Resolve\n4. History\n5. Profile\n0. Logout\n";
         choice = numberInput("Choose: ", 0, 5);
         if (choice == 1) system.showAssigned(officer);
         else if (choice == 2) system.startWork(officer);
@@ -943,13 +966,13 @@ int main() {
     try {
     UserManager userManager;
     CivicCareSystem system;
-    cout << "At any input: back = return to menu, exit = save and quit.\n";
+    cout << "At any input: type \"back\" = return to menu, \"exit\" = save and quit.\n";
     int choice = -1;
     do {
         try {
-        cout << "\n========================================\n" << "       CIVICCARE BANGLADESH\n" << "========================================\n"
-             << "\n1. Citizen sign up\n\n2. Government staff sign up\n\n"
-             << "3. Login\n\n4. Public complaints\n\n0. Exit\n\n";
+        cout << "\n========================================\n" << "       Civic Care Bangladesh\n" << "========================================\n"
+             << "\n1. Citizen Sign Up\n2. Authority Sign Up\n"
+             << "3. Login\n4. Public Complaints\n0. Exit\n";
         choice = numberInput("Choose: ", 0, 4);
         if (choice == 1) userManager.citizenSignUp();
         else if (choice == 2) userManager.staffSignUp();

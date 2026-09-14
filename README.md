@@ -4,6 +4,9 @@ A beginner-friendly C++ console project for managing public complaints. The
 complete program intentionally stays in one `main.cpp` file and uses simple
 functions, loops, classes and text files.
 
+The current source in `src/main.cpp` is based on the team's edited
+`complaintmgmt.cpp`, with the complaint poll changes applied.
+
 ## Workflow
 
 ```text
@@ -19,23 +22,34 @@ Submitted -> Under Review -> Assigned -> In Progress -> Resolved -> Closed
 - Separate Citizen, Authority/Admin and Officer dashboards
 - 10 complaint categories; normal complaints start with `Low` priority
 - Citizen dashboard option 9: Emergency complaint starts with `Critical` priority
-- Menu options are separated by blank lines
+- Menu options are displayed on separate lines
 - At any input, type `back` to cancel the unfinished form and return to the menu,
   or `exit` to save completed work and quit (case-insensitive; `/back` and `/exit` also work)
 - Authority can manually change priority to Low, Medium, High or Critical
 - Validated workflow: review, assign, start work, resolve and close
 - Automatic department mapping and officer assignment
 - My complaints, ID tracking and category/location search
-- One support and one poll vote per citizen
-- Category poll: at least 70% of votes cast makes that category's non-closed
-  complaints Critical (Road, Waste or Drainage). No votes means no promotion.
-  One vote out of one is 100%; there is no minimum turnout. Complaint Support
-  is separate from this poll. Existing and newly submitted complaints are checked,
-  including on restart. Falling below 70% does not automatically lower priority.
+- One support per citizen per complaint (cannot support your own complaint)
+- Complaint poll: shows complaints grouped under all 10 categories, with their
+  IDs, details, status, priority and poll vote counts. Empty categories are shown too.
+  Enter the complaint number (for example, `1001`) to vote for that complaint.
+- One poll vote per citizen per complaint, including their own complaint;
+  the same citizen can vote for other complaints. Duplicate votes are rejected,
+  including after restarting. Support is separate from poll votes.
+- More than 50 distinct user votes (51 or more) makes only that complaint
+  Critical; exactly 50 votes does not. Categories and percentages no longer
+  determine priority. Qualified complaints cannot be manually downgraded.
+  Promotion is checked on restart and recorded once in history/notifications.
+- Closed complaints remain visible but cannot receive votes or change priority.
 - Resolution feedback, read/unread notifications and history
 - Status analytics and resolution-rate calculation
 - Input checks, duplicate-action prevention and invalid-status protection
-- Persistent local files: `users.txt`, `complaints.txt`, `notifications.txt`, `votes.txt` and `history.txt`
+- Persistent local files: `users.txt`, `complaints.txt`, `notifications.txt`,
+  `complaint_votes.txt` and `history.txt`
+
+Old `votes.txt` category votes are left untouched and are not treated as complaint
+votes. New poll records use `userId complaintId` in `complaint_votes.txt`.
+Existing saved priorities are preserved; the old rule is no longer applied.
 
 ## OOP used
 

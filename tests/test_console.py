@@ -45,7 +45,7 @@ class ConsoleTests(unittest.TestCase):
 
     def test_menu_spacing(self):
         output = self.run_app(["0"])
-        self.assertIn("1. Citizen sign up\n\n2. Government", output)
+        self.assertIn("1. Citizen Sign Up\n2. Authority Sign Up\n", output)
 
     def test_exit_and_eof_in_validation(self):
         for lines in (["1", "invalid", "EXIT"], ["1"], ["3", "admin", "/exit"]):
@@ -79,46 +79,106 @@ class ConsoleTests(unittest.TestCase):
         output = self.run_app(["3", "officer", "officer123", "3", "back", "exit"])
         self.assertEqual(output.count("=== OFFICER DASHBOARD ==="), 2)
 
-    def seed_poll(self, road, total):
-        (self.folder / "votes.txt").write_text("".join(
-            f"{i + 100} {1 if i < road else 2}\n" for i in range(total)))
+    def seed_poll(self, count, complaint_id=1001):
+        (self.folder / "complaint_votes.txt").write_text("".join(
+            f"{i + 100} {complaint_id}\n" for i in range(count)))
 
-    def seed_complaint(self, status=0):
-        (self.folder / "complaints.txt").write_text(
-            f"1001|3|Road|Test|Details|Dhaka|0|{status}||Not assigned|0|Not assigned|None|0|None\n")
+    def seed_complaints(self, categories=("Road",), status=0):
+        (self.folder / "complaints.txt").write_text("".join(
+            f"{1001+i}|3|{category}|Case {1001+i}|Details|Dhaka|0|{status}||Not assigned|0|Not assigned|None|0|None\n"
+            for i, category in enumerate(categories)))
 
     def test_poll_threshold_and_closed_complaint(self):
-        for votes, total, status, expected in [(0, 0, 0, "0"), (69, 100, 0, "0"),
-                (70, 100, 0, "3"), (71, 100, 0, "3"), (70, 100, 5, "0")]:
-            self.seed_complaint(status)
-            self.seed_poll(votes, total)
-            self.run_app(["0"])
-            self.assertEqual(self.records()[0].split("|")[6], expected)
+        for votes, status, expected in [(0, 0, "0"), (49, 0, "0"),
+                (50, 0, "0"), (51, 0, "3"), (52, 0, "3"), (51, 5, "0")]:
+            with self.subTest(votes=votes, status=status):
+                self.seed_complaints(status=status)
+                self.seed_poll(votes)
+                self.run_app(["0"])
+                self.assertEqual(self.records()[0].split("|")[6], expected)
 
-    def test_live_vote_reaches_70_and_duplicate_is_rejected(self):
+    def test_live_51st_vote_duplicate_and_other_complaint(self):
         self.run_app(self.signup() + ["0"])
-        self.seed_complaint()
-        self.seed_poll(6, 9)
-        output = self.run_app(self.login() + ["5", "1", "5", "1", "exit"])
+        self.seed_complaints(("Road", "Road"))
+        self.seed_poll(50)
+        output = self.run_app(self.login() +
+                              ["5", "1001", "5", "1001", "5", "1002", "exit"])
+        self.assertIn("Total votes: 51", output)
         self.assertIn("poll priority changed to Critical", output)
-        self.assertIn("Already voted", output)
-        self.assertEqual(self.records()[0].split("|")[6], "3")
-        self.assertEqual(len((self.folder / "votes.txt").read_text().splitlines()), 10)
-
-    def test_new_complaint_and_restart_do_not_duplicate_poll_history(self):
-        self.run_app(self.signup() + ["0"])
-        self.seed_poll(7, 10)
-        self.run_app(self.login() + ["1", "1", "Road title", "Details", "Dhaka", "exit"])
-        self.assertEqual(self.records()[0].split("|")[6], "3")
+        self.assertIn("Already voted for this complaint", output)
+        self.assertEqual([r.split("|")[6] for r in self.records()], ["3", "0"])
+        votes = (self.folder / "complaint_votes.txt").read_text().splitlines()
+        self.assertEqual(len(votes), 52)
+        self.assertEqual(votes.count("3 1001"), 1)
+        self.assertIn("3 1002", votes)
         before = (self.folder / "history.txt").read_text()
-        self.run_app(["0"])
+        notices = (self.folder / "notifications.txt").read_text()
+        output = self.run_app(self.login() + ["5", "1001", "exit"])
+        self.assertIn("Already voted", output)
         self.assertEqual((self.folder / "history.txt").read_text(), before)
+        self.assertEqual((self.folder / "notifications.txt").read_text(), notices)
 
-    def test_duplicate_saved_votes_do_not_inflate_percentage(self):
-        self.seed_complaint()
-        (self.folder / "votes.txt").write_text("100 1\n100 1\n100 1\n101 2\n")
+    def test_all_categories_listed_and_each_complaint_can_receive_votes(self):
+        categories = ("Road", "Waste", "Drainage", "Water", "Street Light",
+                      "Traffic", "Environment", "Public Health", "Electricity", "Other")
+        self.run_app(self.signup() + ["0"])
+        self.seed_complaints(categories)
+        actions = []
+        for i in range(10):
+            actions += ["5", str(1001+i)]
+        output = self.run_app(self.login() + actions + ["exit"])
+        for i, category in enumerate(categories):
+            self.assertIn("=== " + category + " ===", output)
+            self.assertIn("Case " + str(1001+i), output)
+            self.assertIn("Vote accepted for CC-" + str(1001+i), output)
+        self.assertEqual(len((self.folder / "complaint_votes.txt").read_text().splitlines()), 10)
+        self.assertTrue(all(r.split("|")[6] == "0" for r in self.records()))
+
+    def test_new_complaint_does_not_inherit_other_complaints_votes(self):
+        self.run_app(self.signup() + ["0"])
+        self.seed_complaints()
+        self.seed_poll(51)
+        self.run_app(self.login() + ["1", "1", "New road", "Details", "Dhaka", "exit"])
+        self.assertEqual([r.split("|")[6] for r in self.records()], ["3", "0"])
+
+    def test_duplicate_and_damaged_saved_votes(self):
+        self.seed_complaints()
+        self.seed_poll(50)
+        with (self.folder / "complaint_votes.txt").open("a") as file:
+            file.write("100 1001\n100 1001\ninvalid\n-2 1001\n0 1001\n500 1001 extra\n")
         self.run_app(["0"])
         self.assertEqual(self.records()[0].split("|")[6], "0")
+        with (self.folder / "complaint_votes.txt").open("a") as file:
+            file.write("999 1001\n")
+        self.run_app(["0"])
+        self.assertEqual(self.records()[0].split("|")[6], "3")
+
+    def test_old_category_votes_are_preserved_and_not_counted(self):
+        self.seed_complaints()
+        old = "".join(f"{i+100} 1\n" for i in range(80))
+        (self.folder / "votes.txt").write_text(old)
+        self.run_app(["0"])
+        self.assertEqual(self.records()[0].split("|")[6], "0")
+        self.assertEqual((self.folder / "votes.txt").read_text(), old)
+
+    def test_closed_missing_cancelled_and_empty_poll(self):
+        self.run_app(self.signup() + ["0"])
+        output = self.run_app(self.login() + ["5", "exit"])
+        self.assertEqual(output.count("No complaints in this category."), 10)
+        self.seed_complaints(status=5)
+        output = self.run_app(self.login() +
+                              ["5", "1001", "5", "9999", "5", "back", "5", "exit"])
+        self.assertIn("Closed complaints cannot receive votes", output)
+        self.assertIn("Complaint not found", output)
+        self.assertIn("Back to menu", output)
+        self.assertFalse((self.folder / "complaint_votes.txt").exists())
+
+    def test_admin_cannot_downgrade_complaint_with_51_votes(self):
+        self.seed_complaints()
+        self.seed_poll(51)
+        output = self.run_app(["3", "admin", "admin123", "3", "1001", "1", "exit"])
+        self.assertIn("priority must stay Critical", output)
+        self.assertEqual(self.records()[0].split("|")[6], "3")
 
 
 if __name__ == "__main__":
