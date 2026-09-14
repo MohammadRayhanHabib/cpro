@@ -326,7 +326,7 @@ private:
     int id, citizenId, officerId, rating;
     string title, description, location, department, officer;
     string resolution, comment;
-    vector<int> supporters;
+    vector<int> supporters; // Legacy file field; the Support feature was removed.
     Status status;
     Priority priority;
 public:
@@ -368,13 +368,6 @@ public:
         resolution = note;
         return true;
     }
-    bool support(int userId) {
-        if (status == CLOSED) return false;
-        for (int i = 0; i < (int)supporters.size(); i++)
-            if (supporters[i] == userId) return false;
-        supporters.push_back(userId);
-        return true;
-    }
     bool feedback(int stars, string feedbackComment) {
         if (status != RESOLVED || rating != 0) return false;
         rating = stars;
@@ -401,7 +394,6 @@ public:
              << "\nLocation     : " << location
              << "\nPriority     : " << priorityText(priority)
              << "\nStatus       : " << statusText(status)
-             << "\nSupports     : " << supporters.size()
              << "\nDepartment   : " << department
              << "\nOfficer      : " << officer
              << "\nResolution   : " << resolution
@@ -779,18 +771,6 @@ public:
         if (complaint)
             updateStatus(complaint, RESOLVED, CLOSED, "Your complaint was closed.");
     }
-    void support(const Citizen& citizen) {
-        Complaint* complaint = selectComplaint();
-        if (!complaint) return;
-        if (complaint->getCitizenId() == citizen.getId()) {
-            cout << "You cannot support your own complaint.\n";
-            return;
-        }
-        if (complaint->support(citizen.getId())) {
-            cout << "Support added.\n";
-            save();
-        } else cout << "Already supported or complaint is closed.\n";
-    }
     void feedback(const Citizen& citizen) {
         Complaint* complaint = selectComplaint();
         if (!complaint) return;
@@ -891,18 +871,17 @@ void citizenDashboard(CivicCareSystem& system, const Citizen& citizen) {
     int choice = -1;
     do {
         try {
-        cout << "\n=== CITIZEN DASHBOARD ===\n1. Report complaint\n2. View my complaints\n3. Track complaint\n4. Support complaint\n"
-             << "5. Poll\n6. Feedback\n7. Notifications\n8. Profile\n9. Emergency complaint\n0. Logout\n";
-        choice = numberInput("Choose: ", 0, 9);
+        cout << "\n=== CITIZEN DASHBOARD ===\n1. Report complaint\n2. View my complaints\n3. Track complaint\n"
+             << "4. Poll\n5. Feedback\n6. Notifications\n7. Profile\n8. Emergency complaint\n0. Logout\n";
+        choice = numberInput("Choose: ", 0, 8);
         if (choice == 1) system.report(citizen);
         else if (choice == 2) system.showMyComplaints(citizen.getId());
         else if (choice == 3) system.track(citizen);
-        else if (choice == 4) system.support(citizen);
-        else if (choice == 5) system.vote(citizen.getId());
-        else if (choice == 6) system.feedback(citizen);
-        else if (choice == 7) system.notificationsFor(citizen.getId());
-        else if (choice == 8) citizen.showProfile();
-        else if (choice == 9) system.report(citizen, true);
+        else if (choice == 4) system.vote(citizen.getId());
+        else if (choice == 5) system.feedback(citizen);
+        else if (choice == 6) system.notificationsFor(citizen.getId());
+        else if (choice == 7) citizen.showProfile();
+        else if (choice == 8) system.report(citizen, true);
         } catch (InputAction action) {
             if (action == EXIT_PROGRAM) throw;
             cout << "Back to menu. Unfinished input cancelled.\n";

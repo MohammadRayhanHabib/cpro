@@ -59,7 +59,7 @@ class ConsoleTests(unittest.TestCase):
     def test_normal_emergency_and_reload(self):
         output = self.run_app(self.signup() + self.login() +
                               ["1", "1", "Normal title", "Normal details", "Dhaka",
-                               "9", "9", "Danger", "Live wire", "Mirpur", "exit"])
+                               "8", "9", "Danger", "Live wire", "Mirpur", "exit"])
         self.assertIn("Emergency priority: Critical", output)
         normal, emergency = [r.split("|") for r in self.records()]
         self.assertEqual(normal[3:8], ["Normal title", "Normal details", "Dhaka", "0", "0"])
@@ -70,7 +70,7 @@ class ConsoleTests(unittest.TestCase):
     def test_back_and_exit_do_not_submit_partial_complaint(self):
         self.run_app(self.signup() + ["0"])
         for command in ("back", "exit"):
-            self.run_app(self.login() + ["9", "1", "Partial title", command, "exit"])
+            self.run_app(self.login() + ["8", "1", "Partial title", command, "exit"])
             self.assertEqual(self.records(), [])
 
     def test_staff_back_returns_to_own_dashboard(self):
@@ -102,7 +102,7 @@ class ConsoleTests(unittest.TestCase):
         self.seed_complaints(("Road", "Road"))
         self.seed_poll(50)
         output = self.run_app(self.login() +
-                              ["5", "1001", "5", "1001", "5", "1002", "exit"])
+                              ["4", "1001", "4", "1001", "4", "1002", "exit"])
         self.assertIn("Total votes: 51", output)
         self.assertIn("poll priority changed to Critical", output)
         self.assertIn("Already voted for this complaint", output)
@@ -113,7 +113,7 @@ class ConsoleTests(unittest.TestCase):
         self.assertIn("3 1002", votes)
         before = (self.folder / "history.txt").read_text()
         notices = (self.folder / "notifications.txt").read_text()
-        output = self.run_app(self.login() + ["5", "1001", "exit"])
+        output = self.run_app(self.login() + ["4", "1001", "exit"])
         self.assertIn("Already voted", output)
         self.assertEqual((self.folder / "history.txt").read_text(), before)
         self.assertEqual((self.folder / "notifications.txt").read_text(), notices)
@@ -125,7 +125,7 @@ class ConsoleTests(unittest.TestCase):
         self.seed_complaints(categories)
         actions = []
         for i in range(10):
-            actions += ["5", str(1001+i)]
+            actions += ["4", str(1001+i)]
         output = self.run_app(self.login() + actions + ["exit"])
         for i, category in enumerate(categories):
             self.assertIn("=== " + category + " ===", output)
@@ -163,11 +163,11 @@ class ConsoleTests(unittest.TestCase):
 
     def test_closed_missing_cancelled_and_empty_poll(self):
         self.run_app(self.signup() + ["0"])
-        output = self.run_app(self.login() + ["5", "exit"])
+        output = self.run_app(self.login() + ["4", "exit"])
         self.assertEqual(output.count("No complaints in this category."), 10)
         self.seed_complaints(status=5)
         output = self.run_app(self.login() +
-                              ["5", "1001", "5", "9999", "5", "back", "5", "exit"])
+                              ["4", "1001", "4", "9999", "4", "back", "4", "exit"])
         self.assertIn("Closed complaints cannot receive votes", output)
         self.assertIn("Complaint not found", output)
         self.assertIn("Back to menu", output)
